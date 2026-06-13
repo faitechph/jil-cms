@@ -310,7 +310,6 @@ export default function MembersPage({ role }) {
     const payload = {
       name:             form.name.trim(),
       birthdate:        form.birthdate || null,
-      age:              calcAge(form.birthdate),
       address:          form.address.trim(),
       category:         form.category,
       type:             form.type,
@@ -399,7 +398,6 @@ export default function MembersPage({ role }) {
       member_code:      genCode(),
       name:             name || "(Unnamed)",
       birthdate:        birthdate || null,
-      age:              calcAge(birthdate),
       address:          address || "",
       category,
       type,
