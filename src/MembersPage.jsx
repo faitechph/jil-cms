@@ -298,7 +298,7 @@ export default function MembersPage({ role }) {
   };
 
   const genCode = () =>
-    "JIL-" + String(Date.now()).slice(-6) + Math.floor(Math.random()*10);
+  "JIL-" + String(Date.now()) + Math.floor(Math.random()*1000);
 
   const catColor = c =>
     c==="Official Member"?C.blue:c==="First Timer"?C.green:C.amber;
