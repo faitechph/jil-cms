@@ -471,6 +471,7 @@ export default function MembersPage({ role }) {
     // Filter out names already in DB
     const existingNames = new Set(members.map(m=>m.name.toLowerCase()));
     const newOnes = uploadState.rows.filter(r=>!existingNames.has(r.name.toLowerCase()));
+    const ts = Date.now();
     const cleaned = newOnes.map((r, i) => ({
   member_code:      `JIL-${Date.now()}-${i}`,
   name:             r.name,
