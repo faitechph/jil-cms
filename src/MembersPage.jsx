@@ -379,18 +379,21 @@ export default function MembersPage({ role }) {
   const normalizeRow = (row, idx) => {
     const get = (...keys) => {
       for (const k of keys) {
-        const found = Object.keys(row).find(rk=>rk.toLowerCase().replace(/[^a-z]/g,"")=== k);
-        if (found && row[found] !== undefined && row[found] !== "") return String(row[found]).trim();
+        const found = Object.keys(row).find(rk =>
+          rk.toLowerCase().replace(/[^a-z]/g, "") === k.toLowerCase().replace(/[^a-z]/g, "")
+        );
+        if (found && row[found] !== undefined && String(row[found]).trim() !== "") 
+          return String(row[found]).trim();
       }
       return "";
     };
-    const name      = get("name","fullname");
-    const birthdate = get("birthdate","dob","dateofbirth");
-    const address   = get("address");
-    const branch    = get("branch");
-    const leader    = get("lifegroupleader","leader","cellleader");
-    const category  = matchOption(get("category"), CATEGORIES);
-    const type      = matchOption(get("type","membertype"), MEMBER_TYPES);
+    const name      = get("Full Name", "Name", "fullname");
+    const birthdate = get("Birthdate", "dob", "dateofbirth");
+    const address   = get("Address");
+    const branch    = get("Branch");
+    const leader    = get("Lifegroup Leader", "lifegroupleader", "leader", "cellleader");
+    const category  = matchOption(get("Category"), CATEGORIES);
+    const type      = matchOption(get("Type", "membertype"), MEMBER_TYPES);
 
     return {
       member_code:      genCode(),
@@ -400,7 +403,7 @@ export default function MembersPage({ role }) {
       address:          address || "",
       category,
       type,
-      branch:           BRANCHES.find(b=>b.toLowerCase().includes(branch.toLowerCase())) || BRANCHES[0],
+      branch:           BRANCHES.find(b => b.toLowerCase().includes((branch||"").toLowerCase())) || BRANCHES[0],
       lifegroup_leader: leader || "",
       points:           0,
       attendance:       0,
