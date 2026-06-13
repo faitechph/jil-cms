@@ -473,6 +473,7 @@ export default function MembersPage({ role }) {
     // Filter out names already in DB
     const existingNames = new Set(members.map(m=>m.name.toLowerCase()));
     const newOnes = uploadState.rows.filter(r=>!existingNames.has(r.name.toLowerCase()));
+    const cleaned = newOnes.map(({ age, Age, ...rest }) => rest);
 
     if (!newOnes.length) {
       setUploadState({ status:"error", rows:[], error:"All names in this file already exist in the database." });
@@ -485,7 +486,8 @@ export default function MembersPage({ role }) {
     let errorMsg = null;
     for (let i=0; i<newOnes.length; i+=CHUNK) {
       const chunk = newOnes.slice(i, i+CHUNK);
-      const { error } = await supabase.from("members").insert(chunk);
+      const chunkCleaned = cleaned.slice(i, i+CHUNK);
+      const { error } = await supabase.from("members").insert(chunkCleaned);
       if (error) { errorMsg = error.message; break; }
     }
 
