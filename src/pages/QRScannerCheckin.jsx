@@ -195,6 +195,24 @@ export default function QRScannerCheckin({ onCheckedIn }) {
 
       const serviceDate = qrData.date;
 
+      // Get member's branch_id and current points
+      const { data: memberRow } = await supabase
+        .from("members")
+        .select("branch_id, points")
+        .eq("id", profile.member_id)
+        .maybeSingle();
+
+      // Find the service_events row this QR refers to
+      const { data: eventRow } = await supabase
+        .from("service_events")
+        .select("id")
+        .eq("event", qrData.event)
+        .eq("date", qrData.date)
+        .eq("branch", qrData.branch)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
       // Check if already checked in
       const { data: existing } = await supabase
         .from("attendance")
@@ -215,25 +233,20 @@ export default function QRScannerCheckin({ onCheckedIn }) {
       const { error: attErr } = await supabase
         .from("attendance")
         .insert({
-          member_id:      profile.member_id,
-          service_date:   serviceDate,
-          present:        true,
-          checked_in_at:  new Date().toISOString(),
+          member_id:    profile.member_id,
+          branch_id:    memberRow?.branch_id || null,
+          event_id:     eventRow?.id || null,
+          service_date: serviceDate,
+          present:      true,
         });
 
       if (attErr) throw attErr;
 
       // Award +10 points
-      const { data: memberData } = await supabase
-        .from("members")
-        .select("points")
-        .eq("id", profile.member_id)
-        .maybeSingle();
-
-      if (memberData) {
+      if (memberRow) {
         await supabase
           .from("members")
-          .update({ points: (memberData.points || 0) + 10 })
+          .update({ points: (memberRow.points || 0) + 10 })
           .eq("id", profile.member_id);
       }
 
