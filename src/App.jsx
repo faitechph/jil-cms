@@ -406,20 +406,162 @@ const QRDisp = ({ data, size=160 }) => {
 
 /* ─── QR Scanner (webcam-based) ──────────── */
 const QRScanner = ({ onResult }) => {
-  const videoRef = useRef(null);
+  const videoRef  = useRef(null);
+  const canvasRef = useRef(null);
   const streamRef = useRef(null);
-  const [status, setStatus] = useState("idle"); // idle | starting | live | error | denied
-  const [lastScan, setLastScan] = useState(null);
+  const rafRef    = useRef(null);
+  const lastRef   = useRef(null);
+
+  const [status,   setStatus]   = useState("idle"); // idle | live | error
   const [scanning, setScanning] = useState(false);
 
   const stop = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t=>t.stop());
-      streamRef.current = null;
-    }
+    if (rafRef.current)    cancelAnimationFrame(rafRef.current);
+    if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
     setStatus("idle");
     setScanning(false);
   }, []);
+
+  const start = useCallback(async () => {
+    setStatus("idle");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+      setStatus("live");
+      setScanning(true);
+    } catch {
+      setStatus("error");
+    }
+  }, []);
+
+  // Scan loop using jsQR
+  useEffect(() => {
+    if (!scanning) return;
+
+    // Dynamically load jsQR if not already loaded
+    const runLoop = (jsQR) => {
+      const tick = () => {
+        const video  = videoRef.current;
+        const canvas = canvasRef.current;
+        if (!video || !canvas || video.readyState < 2) {
+          rafRef.current = requestAnimationFrame(tick);
+          return;
+        }
+        canvas.width  = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0);
+        const img  = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
+        if (code && code.data !== lastRef.current) {
+          lastRef.current = code.data;
+          onResult(code.data);
+          // Reset debounce after 3s
+          setTimeout(() => { lastRef.current = null; }, 3000);
+        }
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    // Try to import jsQR (assumes it's installed)
+    import("jsqr").then(mod => runLoop(mod.default)).catch(() => {
+      console.warn("jsQR not available — camera scan disabled");
+    });
+
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [scanning, onResult]);
+
+  useEffect(() => () => stop(), [stop]);
+
+  return (
+    <div>
+      {/* Viewfinder */}
+      <div style={{
+        position: "relative", background: C.ink, borderRadius: R.lg,
+        overflow: "hidden", aspectRatio: "4/3", marginBottom: 12,
+      }}>
+        <video ref={videoRef} muted playsInline
+          style={{ width: "100%", height: "100%", objectFit: "cover",
+            display: status === "live" ? "block" : "none" }}/>
+
+        {/* Scan frame overlay */}
+        {status === "live" && (
+          <div style={{ position: "absolute", inset: 0, display: "flex",
+            alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+            <div style={{ width: 160, height: 160, position: "relative" }}>
+              {[
+                { top: 0,    left: 0,  borderTop:    `3px solid ${C.blue2}`, borderLeft:   `3px solid ${C.blue2}` },
+                { top: 0,    right: 0, borderTop:    `3px solid ${C.blue2}`, borderRight:  `3px solid ${C.blue2}` },
+                { bottom: 0, left: 0,  borderBottom: `3px solid ${C.blue2}`, borderLeft:   `3px solid ${C.blue2}` },
+                { bottom: 0, right: 0, borderBottom: `3px solid ${C.blue2}`, borderRight:  `3px solid ${C.blue2}` },
+              ].map((s, i) => (
+                <div key={i} style={{ position: "absolute", width: 20, height: 20, borderRadius: 2, ...s }}/>
+              ))}
+              <style>{`@keyframes scanLine{0%{top:6px;opacity:1}48%{top:148px;opacity:1}50%{opacity:0}52%{top:6px;opacity:0}54%{opacity:1}100%{top:148px;opacity:1}}`}</style>
+              <div style={{ position: "absolute", left: 6, right: 6, height: 2,
+                background: C.blue2, borderRadius: 1,
+                animation: "scanLine 2s linear infinite" }}/>
+            </div>
+          </div>
+        )}
+
+        {/* Idle */}
+        {status === "idle" && (
+          <div style={{ position: "absolute", inset: 0, display: "flex",
+            flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}>
+            <Ico.camera size={32} color="rgba(255,255,255,.25)"/>
+            <span style={{ color: "rgba(255,255,255,.3)", fontSize: 13 }}>Camera off</span>
+          </div>
+        )}
+
+        {/* Error */}
+        {status === "error" && (
+          <div style={{ position: "absolute", inset: 0, display: "flex",
+            flexDirection: "column", alignItems: "center", justifyContent: "center",
+            gap: 10, padding: 20, textAlign: "center" }}>
+            <span style={{ fontSize: 28 }}>📷</span>
+            <span style={{ color: "rgba(255,255,255,.5)", fontSize: 12, lineHeight: 1.5 }}>
+              Camera access denied. Allow permissions and try again.
+            </span>
+          </div>
+        )}
+
+        <canvas ref={canvasRef} style={{ display: "none" }}/>
+      </div>
+
+      {/* Start / Stop button */}
+      <button
+        onClick={() => status === "live" ? stop() : start()}
+        style={{
+          width: "100%", padding: "11px 0", borderRadius: R.full,
+          background: status === "live" ? C.rose2 : C.blue,
+          color: C.white, border: "none", fontWeight: 700, fontSize: 14,
+          cursor: "pointer", display: "flex", alignItems: "center",
+          justifyContent: "center", gap: 8,
+        }}>
+        {status === "live" ? (
+          <><Ico.close size={15} color={C.white}/> Stop Camera</>
+        ) : (
+          <><Ico.camera size={15} color={C.white}/> Start Camera</>
+        )}
+      </button>
+
+      {status === "live" && (
+        <p style={{ textAlign: "center", fontSize: 12, color: C.mist, marginTop: 10, marginBottom: 0 }}>
+          Point camera at a member's personal QR code
+        </p>
+      )}
+    </div>
+  );
+};
 
 
 const MENUS = {
