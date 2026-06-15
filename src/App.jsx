@@ -6,7 +6,6 @@ import QRGeneratorPage from './pages/QRGeneratorPage'
 import QRCode from "qrcode";
 import { supabase } from "./lib/supabaseClient";
 import MyAttendancePage from './pages/MyAttendancePage';
-
 /* ═══════════════════════════════════════════════════════════
    DESIGN SYSTEM
 ═══════════════════════════════════════════════════════════ */
@@ -421,112 +420,6 @@ const QRScanner = ({ onResult }) => {
     setStatus("idle");
     setScanning(false);
   }, []);
-
-  const handleScan = useCallback(async (raw) => {
-    let parsed = { raw };
-    try {
-      const url = new URL(raw.replace("jil://", "https://jil.local/"));
-      parsed = {
-        raw,
-        code:   url.searchParams.get("code"),
-        name:   decodeURIComponent(url.searchParams.get("name")  || ""),
-        branch: decodeURIComponent(url.searchParams.get("branch") || ""),
-      };
-    } catch { /* not a structured URL */ }
-
-    const result = await recordAttendance(parsed);
-    const status = result?.status || "unknown";
-
-    setLog(prev => {
-      if (prev.length && prev[0].raw === raw && Date.now() - prev[0].ts < 3000) return prev;
-      return [{ ...parsed, ts: Date.now(), status }, ...prev].slice(0, 20);
-    });
-  }, [today]);
-
-  const start = useCallback(async () => {
-
-  // Scan loop using BarcodeDetector if available
-  useEffect(() => {
-    if (!scanning) return;
-    let raf;
-    let detector = null;
-    if ("BarcodeDetector" in window) {
-      try { detector = new window.BarcodeDetector({ formats:["qr_code"] }); } catch { detector = null; }
-    }
-    const tick = async () => {
-      if (!videoRef.current || videoRef.current.readyState < 2) {
-        raf = requestAnimationFrame(tick);
-        return;
-      }
-      if (detector) {
-        try {
-          const codes = await detector.detect(videoRef.current);
-          if (codes && codes.length > 0) {
-            const val = codes[0].rawValue;
-            setLastScan(val);
-            onResult && onResult(val);
-          }
-        } catch { /* ignore frame errors */ }
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => raf && cancelAnimationFrame(raf);
-  }, [scanning, onResult]);
-
-  useEffect(() => () => stop(), [stop]);
-
-  const supported = typeof navigator !== "undefined" && !!navigator.mediaDevices;
-  const hasDetector = typeof window !== "undefined" && "BarcodeDetector" in window;
-
-  return (
-    <div>
-      <div style={{ position:"relative", borderRadius:R.lg, overflow:"hidden", background:C.ink, aspectRatio:"4/3", display:"flex", alignItems:"center", justifyContent:"center" }}>
-        {status==="live" ? (
-          <video ref={videoRef} muted playsInline style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
-        ) : (
-          <div style={{ textAlign:"center", padding:24, color:"#64748B" }}>
-            <Ico.camera size={36} color="#475569"/>
-            <div style={{ marginTop:10, fontSize:13 }}>
-              {status==="starting" && "Starting camera…"}
-              {status==="idle" && "Camera preview will appear here"}
-              {status==="denied" && "Camera permission denied"}
-              {status==="error" && "Unable to access camera"}
-            </div>
-          </div>
-        )}
-        {status==="live" && (
-          <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center" }}>
-            <div style={{ width:"60%", height:"60%", border:`2px solid ${C.blue2}`, borderRadius:R.lg, boxShadow:"0 0 0 9999px rgba(0,0,0,.25)" }}/>
-          </div>
-        )}
-      </div>
-
-      {!hasDetector && status==="live" && (
-        <div style={{ background:C.amber3, color:C.amber, borderRadius:R.md, padding:"10px 14px", fontSize:12, marginTop:12 }}>
-          Live camera preview is active, but this browser doesn't support automatic QR detection (BarcodeDetector API). Try Chrome on Android, or use manual code entry below.
-        </div>
-      )}
-
-      {lastScan && (
-        <div style={{ background:C.green3, color:C.green, borderRadius:R.md, padding:"10px 14px", fontSize:12, marginTop:12, wordBreak:"break-all" }}>
-          ✅ Scanned: {lastScan}
-        </div>
-      )}
-
-      <div style={{ display:"flex", gap:8, marginTop:14 }}>
-        {status!=="live" ? (
-          <Btn label="Start Camera" icon={Ico.camera} onClick={start} full disabled={!supported}/>
-        ) : (
-          <Btn label="Stop Camera" icon={Ico.close} onClick={stop} outline danger full/>
-        )}
-      </div>
-      {!supported && (
-        <div style={{ fontSize:12, color:C.rose2, marginTop:8 }}>Camera access isn't available in this browser/context.</div>
-      )}
-    </div>
-  );
-};
 
 
 const MENUS = {
@@ -1401,6 +1294,27 @@ const ScannerPage = ({ role }) => {
 
     return { status: "ok" };
   };
+
+  const handleScan = useCallback(async (raw) => {
+    let parsed = { raw };
+    try {
+      const url = new URL(raw.replace("jil://", "https://jil.local/"));
+      parsed = {
+        raw,
+        code:   url.searchParams.get("code"),
+        name:   decodeURIComponent(url.searchParams.get("name")  || ""),
+        branch: decodeURIComponent(url.searchParams.get("branch") || ""),
+      };
+    } catch { /* not a structured URL */ }
+
+    const result = await recordAttendance(parsed);
+    const status = result?.status || "unknown";
+
+    setLog(prev => {
+      if (prev.length && prev[0].raw === raw && Date.now() - prev[0].ts < 3000) return prev;
+      return [{ ...parsed, ts: Date.now(), status }, ...prev].slice(0, 20);
+    });
+  }, [today]);
 
   const start = useCallback(async () => {
     setStatus("starting");
