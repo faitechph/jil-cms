@@ -69,7 +69,7 @@ export default function QRScannerCheckin({ onCheckedIn }) {
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+          videoRef.current.load();
       }
       setStatus("scanning");
       processedRef.current = null;
@@ -285,8 +285,8 @@ export default function QRScannerCheckin({ onCheckedIn }) {
         <div>
           <div style={{ position:"relative", borderRadius:R.lg, overflow:"hidden",
             background:C.ink, aspectRatio:"4/3", marginBottom:12 }}>
-            <video ref={videoRef} muted playsInline
-              style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/>
+            <video ref={videoRef} muted playsInline autoPlay
+            style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/>
 
             {/* Overlay frame */}
             <div style={{ position:"absolute", inset:0, display:"flex",
