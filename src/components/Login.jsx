@@ -12,20 +12,20 @@ const C = {
 const R = { md: "14px", lg: "18px", xl: "24px", xxl: "32px", full: "9999px" };
 
 export default function Login({ onLogin, error }) {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email || !password) {
-      setLocalError("Please enter both email and password.");
+    if (!username || !password) {
+      setLocalError("Please enter both username and password.");
       return;
     }
     setLocalError(null);
     setSubmitting(true);
-    const result = await onLogin(email, password);
+    const result = await onLogin(username, password);
     setSubmitting(false);
     if (!result.ok) {
       setLocalError(result.error || "Sign in failed. Please check your details.");
@@ -91,14 +91,15 @@ export default function Login({ onLogin, error }) {
             Sign In
           </p>
 
+          {/* Username */}
           <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 14 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#94A3B8", letterSpacing: 0.2 }}>Email</label>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#94A3B8", letterSpacing: 0.2 }}>Username</label>
             <input
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@church.org"
+              type="text"
+              autoComplete="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value.toLowerCase())}
+              placeholder="e.g. mariasantos"
               style={{
                 padding: "11px 14px",
                 border: "1.5px solid rgba(255,255,255,.1)",
@@ -111,6 +112,7 @@ export default function Login({ onLogin, error }) {
             />
           </div>
 
+          {/* Password */}
           <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 18 }}>
             <label style={{ fontSize: 12, fontWeight: 600, color: "#94A3B8", letterSpacing: 0.2 }}>Password</label>
             <input

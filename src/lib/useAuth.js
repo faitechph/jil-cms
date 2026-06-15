@@ -38,19 +38,35 @@ export function useAuth() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  const loginWithEmail = async (email, password) => {
-    setError(null);
-    const { data, error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (signInError) {
-      setError(signInError.message);
-      return { ok: false, error: signInError.message };
-    }
-    await loadProfile(data.user);
-    return { ok: true };
-  };
+  // Login using username — looks up the email from profiles table first
+  const loginWithEmail = async (username, password) => {
+  setError(null);
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('name')
+    .eq('username', username.trim())  // ← eq instead of ilike
+    .maybeSingle();
+
+  
+  if (profileError || !profile) {
+    setError("Username not found.");
+    return { ok: false, error: "Username not found." };
+  }
+
+  const { data, error: signInError } = await supabase.auth.signInWithPassword({
+    email: profile.name,
+    password,
+  });
+
+  if (signInError) {
+    setError(signInError.message);
+    return { ok: false, error: signInError.message };
+  }
+
+  await loadProfile(data.user);
+  return { ok: true };
+};
 
   const logout = async () => {
     await supabase.auth.signOut();

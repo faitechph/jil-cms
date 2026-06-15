@@ -1,7 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "./lib/useAuth";
 import Login from "./components/Login";
-import MembersPage from './MembersPage'
+import MembersPage from './pages//MembersPage'
+import QRGeneratorPage from './pages/QRGeneratorPage'
+import QRCode from "qrcode";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
 
 /* ═══════════════════════════════════════════════════════════
    DESIGN SYSTEM
@@ -1218,30 +1226,108 @@ const PrayerPage = () => {
 
 /* ── MY QR (regular member) ──────────────────────────── */
 const MyQRPage = ({ user }) => {
-  const m = SEED_MEMBERS.find(x=>x.name===user.name) || SEED_MEMBERS[0];
-  const rank = getRank(m.points);
+  const [member, setMember] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const canvasRef = useRef(null);
+
+  // Fetch the logged-in user's member record from Supabase
+  useEffect(() => {
+  const fetchMember = async () => {
+    if (!user.memberId) {
+      setLoading(false);
+      return;
+    }
+
+    const { data } = await supabase
+      .from("members")
+      .select("*")
+      .eq("id", user.memberId)
+      .maybeSingle();
+
+    if (data) setMember(data);
+    setLoading(false);
+  };
+  fetchMember();
+}, [user.memberId]);
+  // Generate QR once member data is loaded
+  useEffect(() => {
+    if (!member || !canvasRef.current) return;
+    const qrValue = `jil://member?code=${member.member_code}&name=${encodeURIComponent(member.name)}&branch=${encodeURIComponent(member.branch || "")}`;
+    QRCode.toCanvas(canvasRef.current, qrValue, {
+      width: 200,
+      margin: 2,
+      color: { dark: "#0A0F1E", light: "#FFFFFF" },
+      errorCorrectionLevel: "H",
+    }).catch(err => console.error("QR error:", err));
+  }, [member]);
+
+  const download = () => {
+    if (!canvasRef.current) return;
+    const link = document.createElement("a");
+    link.href = canvasRef.current.toDataURL("image/png");
+    link.download = `${member.name.replace(/\s+/g, "-")}-QR.png`;
+    link.click();
+  };
+
+  const rank = getRank(member?.points || 0);
+
+  if (loading) return (
+    <div style={{ textAlign: "center", padding: "60px 0", color: C.mist }}>
+      Loading your QR…
+    </div>
+  );
+
+  if (!member) return (
+    <div style={{ textAlign: "center", padding: "60px 0", color: C.mist }}>
+      <div style={{ fontSize: 14 }}>No member record found for <strong>{user.name}</strong>.</div>
+      <div style={{ fontSize: 12, marginTop: 8 }}>Ask your admin to add you to the members list.</div>
+    </div>
+  );
+
   return (
     <div>
-      <h2 style={{ margin:"0 0 18px", fontWeight:800, fontSize:20, color:C.ink }}>My QR Code</h2>
-      <Card style={{ maxWidth:380, textAlign:"center" }}>
-        <div style={{ display:"flex", justifyContent:"center", marginBottom:6 }}>
-          <Av name={m.name} size={56}/>
+      <h2 style={{ margin: "0 0 18px", fontWeight: 800, fontSize: 20, color: C.ink }}>My QR Code</h2>
+      <Card style={{ maxWidth: 380, textAlign: "center" }}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
+          <Av name={member.name} size={56} />
         </div>
-        <div style={{ fontWeight:800, fontSize:17, color:C.ink, marginTop:8 }}>{m.name}</div>
-        <div style={{ fontSize:12, color:C.mist, marginBottom:4 }}>{m.memberCode || "JIL-MEMBER"}</div>
-        <Badge label={rank.name} color={rank.color}/>
+        <div style={{ fontWeight: 800, fontSize: 17, color: C.ink, marginTop: 8 }}>{member.name}</div>
+        <div style={{ fontSize: 12, color: C.mist, marginBottom: 4 }}>{member.member_code}</div>
+        <Badge label={rank.name} color={rank.color} />
 
-        <div style={{ display:"flex", justifyContent:"center", margin:"20px 0" }}>
-          <QRDisp data={memberQRData(m)} size={190}/>
-        </div>
-
-        <div style={{ background:C.fog, borderRadius:R.md, padding:"12px 14px", fontSize:12, color:C.slate, textAlign:"left", lineHeight:1.6 }}>
-          Present this QR code to the attendance scanner at the entrance, or show it to a CMT member during service for instant check-in.
+        <div style={{ display: "flex", justifyContent: "center", margin: "20px 0",
+          padding: 16, border: `1px solid ${C.fog}`, borderRadius: R.lg, background: C.white }}>
+          <canvas ref={canvasRef} style={{ maxWidth: "100%" }} />
         </div>
 
-        <div style={{ display:"flex", gap:8, marginTop:14, justifyContent:"center" }}>
-          <Btn label="Download" icon={Ico.download} outline sm onClick={()=>alert("Downloading your QR code…")}/>
-          <Btn label="Share" icon={Ico.send} sm onClick={()=>alert("Sharing your QR code…")}/>
+        {/* Member details */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8,
+          marginBottom: 14, textAlign: "left" }}>
+          <div style={{ background: C.fog, borderRadius: R.md, padding: "10px 12px" }}>
+            <div style={{ fontSize: 10, color: C.mist, fontWeight: 600, textTransform: "uppercase" }}>Branch</div>
+            <div style={{ fontSize: 13, color: C.ink, fontWeight: 600, marginTop: 2 }}>{member.branch?.split("–")[0].trim()}</div>
+          </div>
+          <div style={{ background: C.fog, borderRadius: R.md, padding: "10px 12px" }}>
+            <div style={{ fontSize: 10, color: C.mist, fontWeight: 600, textTransform: "uppercase" }}>Category</div>
+            <div style={{ fontSize: 13, color: C.ink, fontWeight: 600, marginTop: 2 }}>{member.category}</div>
+          </div>
+          <div style={{ background: C.fog, borderRadius: R.md, padding: "10px 12px" }}>
+            <div style={{ fontSize: 10, color: C.mist, fontWeight: 600, textTransform: "uppercase" }}>Type</div>
+            <div style={{ fontSize: 13, color: C.ink, fontWeight: 600, marginTop: 2 }}>{member.type}</div>
+          </div>
+          <div style={{ background: C.fog, borderRadius: R.md, padding: "10px 12px" }}>
+            <div style={{ fontSize: 10, color: C.mist, fontWeight: 600, textTransform: "uppercase" }}>Points</div>
+            <div style={{ fontSize: 13, color: rank.color, fontWeight: 700, marginTop: 2 }}>{member.points || 0} pts</div>
+          </div>
+        </div>
+
+        <div style={{ background: C.fog, borderRadius: R.md, padding: "12px 14px", fontSize: 12,
+          color: C.slate, textAlign: "left", lineHeight: 1.6 }}>
+          Present this QR code to the attendance scanner at the entrance for instant check-in.
+        </div>
+
+        <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "center" }}>
+          <Btn label="Download" icon={Ico.download} outline sm onClick={download} />
         </div>
       </Card>
     </div>
@@ -1427,14 +1513,20 @@ export default function App() {
 
   const renderPage = () => {
     const role = auth.profile.role;
-    const user = { name: auth.profile.name };
+    // Change this in renderPage():
+    const user = { 
+    name: auth.profile.name,
+    id: auth.user.id,
+    email: auth.user.email,
+    memberId: auth.profile.member_id, 
+    };
     switch(page) {
       case "dashboard":  return <Dashboard    role={role} user={user}/>;
       case "attendance": return <AttendancePage role={role} user={user}/>;
       case "finance":    return <FinancePage  role={role} user={user}/>;
       case "reports":    return <ReportsPage  role={role}/>;
       case "members":    return <MembersPage  role={role}/>;
-      case "qr":         return <QRPage       role={role}/>;
+      case "qr":         return <QRGeneratorPage />;
       case "myqr":       return <MyQRPage     user={user}/>;
       case "scanner":    return <ScannerPage  role={role}/>;
       case "events":     return <EventsPage/>;
