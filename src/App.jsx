@@ -1253,45 +1253,22 @@ const ScannerPage = ({ role }) => {
   const mob = useIsMobile();
 
   const recordAttendance = async (parsed) => {
-    if (!parsed.code) return; // not a member QR
-
-    // Find member by member_code
+    if (!parsed.code) return { status: "unknown" };
     const { data: member } = await supabase
-      .from("members")
-      .select("id, name, points")
-      .eq("member_code", parsed.code)
-      .maybeSingle();
-
+      .from("members").select("id, name, points")
+      .eq("member_code", parsed.code).maybeSingle();
     if (!member) return { status: "not_found" };
-
-    // Check if already checked in today
     const { data: existing } = await supabase
-      .from("attendance")
-      .select("id")
-      .eq("member_id", member.id)
-      .eq("service_date", today)
-      .maybeSingle();
-
+      .from("attendance").select("id")
+      .eq("member_id", member.id).eq("service_date", today).maybeSingle();
     if (existing) return { status: "already" };
-
-    // Record attendance
-    const { error } = await supabase
-      .from("attendance")
-      .insert({
-        member_id:     member.id,
-        service_date:  today,
-        present:       true,
-        checked_in_at: new Date().toISOString(),
-      });
-
+    const { error } = await supabase.from("attendance").insert({
+      member_id: member.id, service_date: today,
+      present: true, checked_in_at: new Date().toISOString(),
+    });
     if (error) return { status: "error", msg: error.message };
-
-    // Award +10 points
-    await supabase
-      .from("members")
-      .update({ points: (member.points || 0) + 10 })
-      .eq("id", member.id);
-
+    await supabase.from("members")
+      .update({ points: (member.points || 0) + 10 }).eq("id", member.id);
     return { status: "ok" };
   };
 
@@ -1302,42 +1279,17 @@ const ScannerPage = ({ role }) => {
       parsed = {
         raw,
         code:   url.searchParams.get("code"),
-        name:   decodeURIComponent(url.searchParams.get("name")  || ""),
+        name:   decodeURIComponent(url.searchParams.get("name")   || ""),
         branch: decodeURIComponent(url.searchParams.get("branch") || ""),
       };
     } catch { /* not a structured URL */ }
-
     const result = await recordAttendance(parsed);
     const status = result?.status || "unknown";
-
     setLog(prev => {
       if (prev.length && prev[0].raw === raw && Date.now() - prev[0].ts < 3000) return prev;
       return [{ ...parsed, ts: Date.now(), status }, ...prev].slice(0, 20);
     });
   }, [today]);
-
-  const start = useCallback(async () => {
-    setStatus("starting");
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: { ideal: "environment" } } 
-      });
-      streamRef.current = stream;
-      setStatus("live");
-      setScanning(true);
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.setAttribute("playsinline", true);
-          videoRef.current.setAttribute("autoplay", true);
-          videoRef.current.muted = true;
-          videoRef.current.play().catch(err => console.error("Video play error:", err));
-        }
-      }, 100);
-    } catch (err) {
-      setStatus(err && err.name === "NotAllowedError" ? "denied" : "error");
-    }
-  }, []);
 
   const submitManual = () => {
     if (!manual.trim()) return;
@@ -1346,11 +1298,11 @@ const ScannerPage = ({ role }) => {
   };
 
   const statusLabel = (s) => {
-    if (s === "ok")        return { label:"Checked In ✓",  color:C.green };
-    if (s === "already")   return { label:"Already In",     color:C.amber };
-    if (s === "not_found") return { label:"Not Found",      color:C.rose2 };
-    if (s === "error")     return { label:"Error",          color:C.rose2 };
-    return                        { label:"Logged",          color:C.slate };
+    if (s === "ok")        return { label:"Checked In ✓", color:C.green };
+    if (s === "already")   return { label:"Already In",    color:C.amber };
+    if (s === "not_found") return { label:"Not Found",     color:C.rose2 };
+    if (s === "error")     return { label:"Error",         color:C.rose2 };
+    return                        { label:"Logged",         color:C.slate };
   };
 
   return (
@@ -1388,18 +1340,13 @@ const ScannerPage = ({ role }) => {
             <h3 style={{ margin:0, fontWeight:700, fontSize:14, color:C.ink }}>Scan Log</h3>
             <div style={{ display:"flex", gap:8, alignItems:"center" }}>
               {log.length > 0 && <Badge label={`${log.length} scanned`} color={C.green}/>}
-              {log.length > 0 && (
-                <Btn label="Clear" outline sm onClick={()=>setLog([])}/>
-              )}
+              {log.length > 0 && <Btn label="Clear" outline sm onClick={()=>setLog([])}/>}
             </div>
           </div>
-
           {log.length === 0 ? (
             <div style={{ padding:"40px 20px", textAlign:"center", color:C.mist }}>
               <Ico.scan size={36} color={C.cloud}/>
-              <div style={{ marginTop:10, fontSize:13 }}>
-                No scans yet. Point the camera at a member's QR code.
-              </div>
+              <div style={{ marginTop:10, fontSize:13 }}>No scans yet. Point the camera at a member's QR code.</div>
             </div>
           ) : (
             <div style={{ maxHeight:420, overflowY:"auto" }}>
@@ -1408,8 +1355,7 @@ const ScannerPage = ({ role }) => {
                 return (
                   <div key={s.ts} style={{ display:"flex", alignItems:"center", gap:12,
                     padding:"12px 20px", borderTop: i>0?`1px solid ${C.fog}`:"none",
-                    background: s.status==="ok"?`${C.green}06`:
-                      s.status==="already"?`${C.amber}06`:C.white }}>
+                    background: s.status==="ok"?`${C.green}06`:s.status==="already"?`${C.amber}06`:C.white }}>
                     {s.name ? <Av name={s.name} size={34}/> : (
                       <div style={{ width:34, height:34, borderRadius:"50%", background:C.fog,
                         display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -1437,15 +1383,13 @@ const ScannerPage = ({ role }) => {
               })}
             </div>
           )}
-
-          {/* Summary */}
           {log.length > 0 && (
             <div style={{ padding:"12px 20px", borderTop:`1px solid ${C.fog}`,
               display:"flex", gap:16, background:C.fog }}>
               {[
-                { label:"Checked In", color:C.green,  count:log.filter(s=>s.status==="ok").length },
-                { label:"Already In", color:C.amber,  count:log.filter(s=>s.status==="already").length },
-                { label:"Not Found",  color:C.rose2,  count:log.filter(s=>s.status==="not_found").length },
+                { label:"Checked In", color:C.green, count:log.filter(s=>s.status==="ok").length },
+                { label:"Already In", color:C.amber, count:log.filter(s=>s.status==="already").length },
+                { label:"Not Found",  color:C.rose2, count:log.filter(s=>s.status==="not_found").length },
               ].map(x => (
                 <div key={x.label} style={{ textAlign:"center" }}>
                   <div style={{ fontWeight:700, fontSize:16, color:x.color }}>{x.count}</div>
