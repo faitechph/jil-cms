@@ -917,6 +917,7 @@ const AnnouncementsPage = () => {
   const [toast, setToast] = useState(null); 
   const [themeFile, setThemeFile] = useState(null);
   const [themeUploading, setThemeUploading] = useState(false);
+  const [themeUrl, setThemeUrl] = useState(null);
   const mob = useIsMobile();
 
   const TAG_OPTIONS = ["Worship","Events","Ministry","Announcement","Other"];
@@ -974,6 +975,7 @@ const AnnouncementsPage = () => {
     const { data: { publicUrl } } = supabase.storage.from("theme").getPublicUrl(path);
     await supabase.from("monthly_theme").update({ image_url: publicUrl, updated_at: new Date().toISOString() }).eq("id", 1);
     setToast({ msg: "Monthly theme updated!", type: "success" });
+    setThemeUrl(publicUrl);
     setThemeFile(null);
   }
   setThemeUploading(false);
@@ -1081,9 +1083,11 @@ const AnnouncementsPage = () => {
     <Card style={{ marginTop:24, padding:20 }}>
       <h3 style={{ margin:"0 0 12px", fontWeight:700, fontSize:16, color:C.ink }}>Monthly Theme Image</h3>
       <input type="file" accept="image/jpeg,image/png" onChange={e => setThemeFile(e.target.files[0])}/>
-      {themeFile && (
-        <div style={{ marginTop:12 }}>
-          <Btn label={themeUploading ? "Uploading…" : "Upload Theme"} onClick={uploadTheme} disabled={themeUploading}/>
+      {themeUrl && (
+        <div style={{ marginTop:12, display:"flex", alignItems:"center", gap:8 }}>
+          <input readOnly value={themeUrl}
+            style={{ flex:1, padding:"8px 12px", borderRadius:R.md, border:`1.5px solid ${C.fog}`, fontSize:12, color:C.slate, background:C.fog }}/>
+          <Btn sm label="Copy Link" onClick={() => { navigator.clipboard.writeText(themeUrl); setToast({ msg:"Link copied!", type:"success" }); }}/>
         </div>
       )}
     </Card>
