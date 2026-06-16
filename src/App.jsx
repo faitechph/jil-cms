@@ -828,6 +828,7 @@ const Dashboard = ({ role, user }) => {
     .then(({ data }) => { if (data) setAnnouncements(data); });
   supabase.from("events").select("*").order("date", { ascending: true })
     .then(({ data }) => { if (data) setEvents(data); });
+  // ↓ THIS LINE IS MISSING
   supabase.from("monthly_theme").select("image_url").eq("id", 1).single()
     .then(({ data }) => { if (data?.image_url) setThemeUrl(data.image_url); });
   }, []);
@@ -1083,6 +1084,11 @@ const AnnouncementsPage = () => {
     <Card style={{ marginTop:24, padding:20 }}>
       <h3 style={{ margin:"0 0 12px", fontWeight:700, fontSize:16, color:C.ink }}>Monthly Theme Image</h3>
       <input type="file" accept="image/jpeg,image/png" onChange={e => setThemeFile(e.target.files[0])}/>
+      {themeFile && (
+        <div style={{ marginTop:12}}>
+          <Btn label={themeUploading ? "Uploading..." : "Upload"} onClick={uploadTheme}/>
+        </div>
+       ) }
       {themeUrl && (
         <div style={{ marginTop:12, display:"flex", alignItems:"center", gap:8 }}>
           <input readOnly value={themeUrl}
@@ -1091,7 +1097,6 @@ const AnnouncementsPage = () => {
         </div>
       )}
     </Card>
-
     </div>
   );
 };
