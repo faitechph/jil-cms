@@ -628,7 +628,6 @@ const MENUS = {
     {id:"reports",   label:"Reports",     I:Ico.report},
     {id:"myqr",      label:"My QR Code",  I:Ico.idcard},
     {id:"prayer",    label:"Prayer",      I:Ico.prayer},
-    {id:"events",    label:"Events",      I:Ico.calendar},
   ],
   admin: [
   {id:"dashboard",      label:"Dashboard",    I:Ico.home},
@@ -636,10 +635,9 @@ const MENUS = {
   {id:"attendance",     label:"Attendance",   I:Ico.attendance},
   {id:"finance",        label:"Finance",      I:Ico.finance},
   {id:"reports",        label:"Reports",      I:Ico.report},
-  {id:"announcements",  label:"Announcements",I:Ico.bell},   // ← add this
+  {id:"announcements",  label:"Announcements",I:Ico.bell},   
   {id:"qr",             label:"QR Generator", I:Ico.qr},
   {id:"scanner",        label:"QR Scanner",   I:Ico.scan},
-  {id:"events",         label:"Events",       I:Ico.calendar},
  ],
 superadmin: [
   {id:"dashboard",      label:"Dashboard",    I:Ico.home},
@@ -647,10 +645,9 @@ superadmin: [
   {id:"attendance",     label:"Attendance",   I:Ico.attendance},
   {id:"finance",        label:"Finance",      I:Ico.finance},
   {id:"reports",        label:"Reports",      I:Ico.report},
-  {id:"announcements",  label:"Announcements",I:Ico.bell},   // ← add this
+  {id:"announcements",  label:"Announcements",I:Ico.bell},   
   {id:"qr",             label:"QR Generator", I:Ico.qr},
   {id:"scanner",        label:"QR Scanner",   I:Ico.scan},
-  {id:"events",         label:"Events",       I:Ico.calendar},
   {id:"branches",       label:"Branches",     I:Ico.branch},
   {id:"settings",       label:"Settings",     I:Ico.settings},
   ],
@@ -1825,7 +1822,6 @@ export default function App() {
   case "qr":             return <QRGeneratorPage />;
   case "myqr":           return <MyQRPage        user={user}/>;
   case "scanner":        return <ScannerPage     role={role}/>;
-  case "events":         return <EventsPage/>;
   case "prayer":         return <PrayerPage/>;
   case "branches":       return <BranchesPage/>;
   case "settings":       return <SettingsPage    role={role}/>;
