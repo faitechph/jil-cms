@@ -631,26 +631,28 @@ const MENUS = {
     {id:"events",    label:"Events",      I:Ico.calendar},
   ],
   admin: [
-  {id:"dashboard", label:"Dashboard",    I:Ico.home},
-  {id:"members",   label:"Members",      I:Ico.users},
-  {id:"attendance",label:"Attendance",   I:Ico.attendance},
-  {id:"finance",   label:"Finance",      I:Ico.finance},
-  {id:"reports",   label:"Reports",      I:Ico.report},
-  {id:"qr",        label:"QR Generator", I:Ico.qr},
-  {id:"scanner",   label:"QR Scanner",   I:Ico.scan},
-  {id:"events",    label:"Events",       I:Ico.calendar},
-  ],
-  superadmin: [
-    {id:"dashboard", label:"Dashboard",   I:Ico.home},
-    {id:"members",   label:"Members",     I:Ico.users},
-    {id:"attendance",label:"Attendance",  I:Ico.attendance},
-    {id:"finance",   label:"Finance",     I:Ico.finance},
-    {id:"reports",   label:"Reports",     I:Ico.report},
-    {id:"qr",        label:"QR Generator",I:Ico.qr},
-    {id:"scanner",   label:"QR Scanner",  I:Ico.scan},
-    {id:"events",    label:"Events",      I:Ico.calendar},
-    {id:"branches",  label:"Branches",    I:Ico.branch},
-    {id:"settings",  label:"Settings",    I:Ico.settings},
+  {id:"dashboard",      label:"Dashboard",    I:Ico.home},
+  {id:"members",        label:"Members",      I:Ico.users},
+  {id:"attendance",     label:"Attendance",   I:Ico.attendance},
+  {id:"finance",        label:"Finance",      I:Ico.finance},
+  {id:"reports",        label:"Reports",      I:Ico.report},
+  {id:"announcements",  label:"Announcements",I:Ico.bell},   // ← add this
+  {id:"qr",             label:"QR Generator", I:Ico.qr},
+  {id:"scanner",        label:"QR Scanner",   I:Ico.scan},
+  {id:"events",         label:"Events",       I:Ico.calendar},
+ ],
+superadmin: [
+  {id:"dashboard",      label:"Dashboard",    I:Ico.home},
+  {id:"members",        label:"Members",      I:Ico.users},
+  {id:"attendance",     label:"Attendance",   I:Ico.attendance},
+  {id:"finance",        label:"Finance",      I:Ico.finance},
+  {id:"reports",        label:"Reports",      I:Ico.report},
+  {id:"announcements",  label:"Announcements",I:Ico.bell},   // ← add this
+  {id:"qr",             label:"QR Generator", I:Ico.qr},
+  {id:"scanner",        label:"QR Scanner",   I:Ico.scan},
+  {id:"events",         label:"Events",       I:Ico.calendar},
+  {id:"branches",       label:"Branches",     I:Ico.branch},
+  {id:"settings",       label:"Settings",     I:Ico.settings},
   ],
 };
 
@@ -810,10 +812,26 @@ const GamStrip = ({ user }) => {
 ═══════════════════════════════════════════════════════════ */
 
 /* ── DASHBOARD ──────────────────────────── */
+const TAG_COLORS = {
+  Worship: C.blue, Events: C.violet, Ministry: C.green,
+  Default: C.slate,
+};
+
 const Dashboard = ({ role, user }) => {
-  const isAdmin = role!=="regular";
-  const total = FINANCE_DATA.reduce((a,f)=>a+f.amount,0);
+  const isAdmin = role !== "regular";
+  const total = FINANCE_DATA.reduce((a, f) => a + f.amount, 0);
   const mob = useIsMobile();
+
+  const [announcements, setAnnouncements] = useState([]);
+  const [events, setEvents] = useState([]);
+
+  useEffect(() => {
+    supabase.from("announcements").select("*").order("created_at", { ascending: false })
+      .then(({ data }) => { if (data) setAnnouncements(data); });
+
+    supabase.from("events").select("*").order("date", { ascending: true })
+      .then(({ data }) => { if (data) setEvents(data); });
+  }, []);
 
   return (
     <div>
@@ -834,8 +852,8 @@ const Dashboard = ({ role, user }) => {
 
       {/* Stats */}
       <div style={{ display:"grid", gridTemplateColumns:`repeat(auto-fit,minmax(${mob?140:160}px,1fr))`, gap:12, marginBottom:20 }}>
-        <StatTile icon={Ico.users}     label="Members"       value={SEED_MEMBERS.length} sub={`Active: ${SEED_MEMBERS.filter(m=>m.category==="Official Member").length}`} color={C.blue}   accent="+2 this month"/>
-        <StatTile icon={Ico.attendance}label="Avg Attendance" value="84%"                 sub="Last Sunday: 127"                                                           color={C.violet2} accent="↑ 5% vs last month"/>
+        <StatTile icon={Ico.users}      label="Members"        value={SEED_MEMBERS.length} sub={`Active: ${SEED_MEMBERS.filter(m=>m.category==="Official Member").length}`} color={C.blue}    accent="+2 this month"/>
+        <StatTile icon={Ico.attendance} label="Avg Attendance" value="84%"                  sub="Last Sunday: 127"                                                            color={C.violet2} accent="↑ 5% vs last month"/>
         {isAdmin && <StatTile icon={Ico.finance} label="Total Offerings" value={`₱${total.toLocaleString()}`} sub="This month" color={C.green}/>}
         {isAdmin && <StatTile icon={Ico.branch}  label="Branches"        value={BRANCHES.length}              sub="All active" color={C.amber}/>}
       </div>
@@ -843,46 +861,213 @@ const Dashboard = ({ role, user }) => {
       <div style={{ display:"grid", gridTemplateColumns: mob?"1fr":"1fr 300px", gap:16 }}>
         {/* Announcements */}
         <div>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-            <h3 style={{ margin:0, fontWeight:700, fontSize:15, color:C.ink }}>Announcements</h3>
-          </div>
+          <h3 style={{ margin:"0 0 12px", fontWeight:700, fontSize:15, color:C.ink }}>Announcements</h3>
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-            {ANNOUNCEMENTS.map(a=>(
-              <Card key={a.id} style={{ borderLeft:`3px solid ${a.color}`, padding:"14px 16px" }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:5, gap:8 }}>
-                  <strong style={{ fontSize:14, color:C.ink }}>{a.title}</strong>
-                  <Badge label={a.tag} color={a.color}/>
-                </div>
-                <p style={{ margin:"0 0 5px", fontSize:13, color:C.slate, lineHeight:1.5 }}>{a.body}</p>
-                <span style={{ fontSize:11, color:C.mist }}>{a.date}</span>
-              </Card>
-            ))}
+            {announcements.length === 0
+              ? <p style={{ color:C.mist, fontSize:13 }}>No announcements yet.</p>
+              : announcements.map(a => {
+                  const color = TAG_COLORS[a.tag] || TAG_COLORS.Default;
+                  return (
+                    <Card key={a.id} style={{ borderLeft:`3px solid ${color}`, padding:"14px 16px" }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:5, gap:8 }}>
+                        <strong style={{ fontSize:14, color:C.ink }}>{a.title}</strong>
+                        {a.tag && <Badge label={a.tag} color={color}/>}
+                      </div>
+                      <p style={{ margin:"0 0 5px", fontSize:13, color:C.slate, lineHeight:1.5 }}>{a.body}</p>
+                      <span style={{ fontSize:11, color:C.mist }}>{a.date}</span>
+                    </Card>
+                  );
+                })
+            }
           </div>
         </div>
 
-        {/* Events */}
+        {/* Upcoming */}
         {!mob && (
           <div>
             <h3 style={{ margin:"0 0 12px", fontWeight:700, fontSize:15, color:C.ink }}>Upcoming</h3>
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-              {EVENTS.map(e=>{
-                const cfg = e.type==="birthday"?{color:C.rose2,I:Ico.cake}:e.type==="worship"?{color:C.blue,I:Ico.sparkle}:{color:C.violet2,I:Ico.calendar};
-                return (
-                  <Card key={e.id} style={{ padding:"12px 14px", display:"flex", alignItems:"center", gap:12 }}>
-                    <div style={{ width:34,height:34,borderRadius:R.md,background:`${cfg.color}12`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
-                      <cfg.I size={15} color={cfg.color}/>
-                    </div>
-                    <div>
-                      <div style={{ fontWeight:600, fontSize:13, color:C.ink }}>{e.name}</div>
-                      <div style={{ fontSize:11, color:C.mist }}>{e.date} · {e.branch}</div>
-                    </div>
-                  </Card>
-                );
-              })}
+              {events.length === 0
+                ? <p style={{ color:C.mist, fontSize:13 }}>No upcoming events.</p>
+                : events.map(e => {
+                    const cfg = e.type==="birthday"
+                      ? { color:C.rose2,   I:Ico.cake }
+                      : e.type==="worship"
+                      ? { color:C.blue,    I:Ico.sparkle }
+                      : { color:C.violet2, I:Ico.calendar };
+                    return (
+                      <Card key={e.id} style={{ padding:"12px 14px", display:"flex", alignItems:"center", gap:12 }}>
+                        <div style={{ width:36, height:36, borderRadius:R.sm, background:cfg.color+"22", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                          <cfg.I size={16} color={cfg.color}/>
+                        </div>
+                        <div>
+                          <div style={{ fontSize:13, fontWeight:600, color:C.ink }}>{e.name}</div>
+                          <div style={{ fontSize:11, color:C.mist }}>{e.date}{e.branch ? ` · ${e.branch}` : ""}</div>
+                        </div>
+                      </Card>
+                    );
+                  })
+              }
             </div>
           </div>
         )}
       </div>
+    </div>
+  );
+};
+
+/* ── ANNOUNCEMENTS MANAGER ──────────────────────────── */
+const AnnouncementsPage = () => {
+  const [tab, setTab] = useState("announcements");
+  const [announcements, setAnnouncements] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [aForm, setAForm] = useState({ title:"", body:"", tag:"Worship", date:"" });
+  const [eForm, setEForm] = useState({ name:"", type:"event", date:"", branch:"" });
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(null); 
+  const mob = useIsMobile();
+
+  const TAG_OPTIONS = ["Worship","Events","Ministry","Announcement","Other"];
+  const TYPE_OPTIONS = ["event","worship","birthday"];
+
+  useEffect(() => {
+    supabase.from("announcements").select("*").order("created_at", { ascending: false })
+      .then(({ data }) => { if (data) setAnnouncements(data); });
+    supabase.from("events").select("*").order("date", { ascending: true })
+      .then(({ data }) => { if (data) setEvents(data); });
+  }, []);
+
+  const addAnnouncement = async () => {
+  if (!aForm.title.trim()) return;
+  setSaving(true);
+  const { data, error } = await supabase.from("announcements").insert([aForm]).select().single();
+  if (error) {
+    setToast({ msg: "Failed to post: " + error.message, type: "error" });
+  } else {
+    setAnnouncements(prev => [data, ...prev]);
+    setAForm({ title:"", body:"", tag:"Worship", date:"" });
+    setToast({ msg: "Announcement posted!", type: "success" });
+  }
+  setSaving(false);
+  };
+
+  const deleteAnnouncement = async (id) => {
+    await supabase.from("announcements").delete().eq("id", id);
+    setAnnouncements(prev => prev.filter(a => a.id !== id));
+  };
+
+  const addEvent = async () => {
+  if (!eForm.name.trim()) return;
+  setSaving(true);
+  const { data, error } = await supabase.from("events").insert([eForm]).select().single();
+  if (error) {
+    setToast({ msg: "Failed to add event: " + error.message, type: "error" });
+  } else {
+    setEvents(prev => [...prev, data]);
+    setEForm({ name:"", type:"event", date:"", branch:"" });
+    setToast({ msg: "Event added!", type: "success" });
+  }
+  setSaving(false);
+  };
+
+  const deleteEvent = async (id) => {
+    await supabase.from("events").delete().eq("id", id);
+    setEvents(prev => prev.filter(e => e.id !== id));
+  };
+
+  return (
+    <div>
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)}/>}
+      <h2 style={{ margin:"0 0 16px", fontWeight:800, fontSize:20, color:C.ink }}>Announcements & Events</h2>
+      <div style={{ display:"flex", gap:8, marginBottom:18 }}>
+        <Pill label="Announcements" active={tab==="announcements"} onClick={()=>setTab("announcements")}/>
+        <Pill label="Upcoming Events" active={tab==="events"} onClick={()=>setTab("events")} color={C.violet2}/>
+      </div>
+
+      {tab === "announcements" && (
+        <div style={{ display:"grid", gridTemplateColumns: mob?"1fr":"1fr 1fr", gap:20 }}>
+          {/* Form */}
+          <Card>
+            <h3 style={{ margin:"0 0 16px", fontWeight:700, fontSize:14, color:C.ink }}>New Announcement</h3>
+            <Inp label="Title" value={aForm.title} onChange={v=>setAForm({...aForm,title:v})} placeholder="e.g. Sunday Worship Service" required/>
+            <Inp label="Body" value={aForm.body} onChange={v=>setAForm({...aForm,body:v})} placeholder="Details…"/>
+            <Inp label="Tag" value={aForm.tag} onChange={v=>setAForm({...aForm,tag:v})} options={TAG_OPTIONS}/>
+            <Inp label="Date / Schedule" value={aForm.date} onChange={v=>setAForm({...aForm,date:v})} placeholder="e.g. June 2, 2026 or Every Saturday"/>
+            <Btn label={saving?"Saving…":"Post Announcement"} icon={Ico.send} onClick={addAnnouncement} full/>
+          </Card>
+
+          {/* List */}
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            {announcements.length === 0
+              ? <p style={{ color:C.mist, fontSize:13 }}>No announcements yet.</p>
+              : announcements.map(a => {
+                  const color = TAG_COLORS[a.tag] || TAG_COLORS.Default;
+                  return (
+                    <Card key={a.id} style={{ borderLeft:`3px solid ${color}`, padding:"14px 16px" }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8 }}>
+                        <div style={{ flex:1 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                            <strong style={{ fontSize:14, color:C.ink }}>{a.title}</strong>
+                            <Badge label={a.tag} color={color}/>
+                          </div>
+                          <p style={{ margin:"0 0 4px", fontSize:13, color:C.slate, lineHeight:1.5 }}>{a.body}</p>
+                          <span style={{ fontSize:11, color:C.mist }}>{a.date}</span>
+                        </div>
+                        <button onClick={()=>deleteAnnouncement(a.id)}
+                          style={{ border:"none", background:C.rose3, borderRadius:R.sm, padding:"6px 8px", cursor:"pointer", flexShrink:0 }}>
+                          <Ico.trash size={13} color={C.rose2}/>
+                        </button>
+                      </div>
+                    </Card>
+                  );
+                })
+            }
+          </div>
+        </div>
+      )}
+
+      {tab === "events" && (
+        <div style={{ display:"grid", gridTemplateColumns: mob?"1fr":"1fr 1fr", gap:20 }}>
+          {/* Form */}
+          <Card>
+            <h3 style={{ margin:"0 0 16px", fontWeight:700, fontSize:14, color:C.ink }}>New Upcoming Event</h3>
+            <Inp label="Name" value={eForm.name} onChange={v=>setEForm({...eForm,name:v})} placeholder="e.g. Youth Praise Night" required/>
+            <Inp label="Type" value={eForm.type} onChange={v=>setEForm({...eForm,type:v})} options={TYPE_OPTIONS}/>
+            <Inp label="Date" value={eForm.date} onChange={v=>setEForm({...eForm,date:v})} placeholder="e.g. June 14"/>
+            <Inp label="Branch" value={eForm.branch} onChange={v=>setEForm({...eForm,branch:v})} options={["", ...BRANCHES]}/>
+            <Btn label={saving?"Saving…":"Add Event"} icon={Ico.plus} onClick={addEvent} full color={C.violet2}/>
+          </Card>
+
+          {/* List */}
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            {events.length === 0
+              ? <p style={{ color:C.mist, fontSize:13 }}>No upcoming events yet.</p>
+              : events.map(e => {
+                  const cfg = e.type==="birthday"
+                    ? { color:C.rose2,   I:Ico.cake }
+                    : e.type==="worship"
+                    ? { color:C.blue,    I:Ico.sparkle }
+                    : { color:C.violet2, I:Ico.calendar };
+                  return (
+                    <Card key={e.id} style={{ padding:"12px 14px", display:"flex", alignItems:"center", gap:12 }}>
+                      <div style={{ width:36, height:36, borderRadius:R.sm, background:cfg.color+"22", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                        <cfg.I size={16} color={cfg.color}/>
+                      </div>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:13, fontWeight:600, color:C.ink }}>{e.name}</div>
+                        <div style={{ fontSize:11, color:C.mist }}>{e.date}{e.branch ? ` · ${e.branch}` : ""}</div>
+                      </div>
+                      <button onClick={()=>deleteEvent(e.id)}
+                        style={{ border:"none", background:C.rose3, borderRadius:R.sm, padding:"6px 8px", cursor:"pointer" }}>
+                        <Ico.trash size={13} color={C.rose2}/>
+                      </button>
+                    </Card>
+                  );
+                })
+            }
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1606,22 +1791,23 @@ export default function App() {
     memberId: auth.profile.member_id, 
     };
     switch(page) {
-      case "dashboard":  return <Dashboard    role={role} user={user}/>;
-      case "attendance": return role === "regular"
-  ? <MyAttendancePage />
-  : <AttendancePage />;
-      case "finance":    return <FinancePage  role={role} user={user}/>;
-      case "reports":    return <ReportsPage  role={role}/>;
-      case "members":    return <MembersPage  role={role}/>;
-      case "qr":         return <QRGeneratorPage />;
-      case "myqr":       return <MyQRPage     user={user}/>;
-      case "scanner":    return <ScannerPage  role={role}/>;
-      case "events":     return <EventsPage/>;
-      case "prayer":     return <PrayerPage/>;
-      case "branches":   return <BranchesPage/>;
-      case "settings":   return <SettingsPage role={role}/>;
-      default:           return <Dashboard    role={role} user={user}/>;
-    }
+  case "dashboard":      return <Dashboard       role={role} user={user}/>;
+  case "attendance":     return role === "regular"
+                           ? <MyAttendancePage />
+                           : <AttendancePage />;
+  case "finance":        return <FinancePage     role={role} user={user}/>;
+  case "reports":        return <ReportsPage     role={role}/>;
+  case "members":        return <MembersPage     role={role}/>;
+  case "announcements":  return <AnnouncementsPage/>;          // ← add this
+  case "qr":             return <QRGeneratorPage />;
+  case "myqr":           return <MyQRPage        user={user}/>;
+  case "scanner":        return <ScannerPage     role={role}/>;
+  case "events":         return <EventsPage/>;
+  case "prayer":         return <PrayerPage/>;
+  case "branches":       return <BranchesPage/>;
+  case "settings":       return <SettingsPage    role={role}/>;
+  default:               return <Dashboard       role={role} user={user}/>;
+  }
   };
 
   if (loading) {
