@@ -824,31 +824,24 @@ const Dashboard = ({ role, user }) => {
 
   const [announcements, setAnnouncements] = useState([]);
   const [events, setEvents] = useState([]);
+  const [themeUrl, setThemeUrl] = useState(null);
 
   useEffect(() => {
-    supabase.from("announcements").select("*").order("created_at", { ascending: false })
-      .then(({ data }) => { if (data) setAnnouncements(data); });
-
-    supabase.from("events").select("*").order("date", { ascending: true })
-      .then(({ data }) => { if (data) setEvents(data); });
+  supabase.from("announcements").select("*").order("created_at", { ascending: false })
+    .then(({ data }) => { if (data) setAnnouncements(data); });
+  supabase.from("events").select("*").order("date", { ascending: true })
+    .then(({ data }) => { if (data) setEvents(data); });
+  supabase.from("monthly_theme").select("image_url").eq("id", 1).single()
+    .then(({ data }) => { if (data?.image_url) setThemeUrl(data.image_url); });
   }, []);
 
   return (
     <div>
-      {/* Theme Banner */}
-      <div style={{ borderRadius:R.xxl, background:`linear-gradient(130deg,${C.ink} 0%,#1e3a72 60%,#3730a3 100%)`, padding: mob?"22px 20px":"28px 32px", marginBottom:20, position:"relative", overflow:"hidden" }}>
-        <div style={{ position:"absolute", right:-40, top:-40, width:200, height:200, borderRadius:"50%", background:"rgba(255,255,255,.04)" }}/>
-        <div style={{ position:"absolute", right:60, bottom:-60, width:260, height:260, borderRadius:"50%", background:"rgba(255,255,255,.03)" }}/>
-        <div style={{ position:"relative" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:8 }}>
-            <Ico.sparkle size={12} color="rgba(255,255,255,.5)"/>
-            <span style={{ color:"rgba(255,255,255,.5)", fontSize:11, fontWeight:700, letterSpacing:1.2, textTransform:"uppercase" }}>{MONTHLY_THEME.month} · Monthly Theme</span>
-          </div>
-          <h2 style={{ color:"#fff", fontSize: mob?20:26, fontWeight:800, margin:"0 0 8px", letterSpacing:-.5 }}>{MONTHLY_THEME.title}</h2>
-          <p style={{ color:"rgba(255,255,255,.7)", fontSize:13, margin:"0 0 8px", fontStyle:"italic" }}>{MONTHLY_THEME.verse}</p>
-          <p style={{ color:"rgba(255,255,255,.5)", fontSize:12, margin:0, maxWidth:480 }}>{MONTHLY_THEME.desc}</p>
-        </div>
-      </div>
+      {themeUrl && (
+  <div style={{ marginBottom:20, borderRadius:R.xl, overflow:"hidden" }}>
+    <img src={themeUrl} alt="Monthly Theme" style={{ width:"100%", display:"block", maxHeight:320, objectFit:"cover" }}/>
+  </div>
+)}
 
       {/* Stats */}
       <div style={{ display:"grid", gridTemplateColumns:`repeat(auto-fit,minmax(${mob?140:160}px,1fr))`, gap:12, marginBottom:20 }}>
@@ -925,6 +918,8 @@ const AnnouncementsPage = () => {
   const [eForm, setEForm] = useState({ name:"", type:"event", date:"", branch:"" });
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null); 
+  const [themeFile, setThemeFile] = useState(null);
+  const [themeUploading, setThemeUploading] = useState(false);
   const mob = useIsMobile();
 
   const TAG_OPTIONS = ["Worship","Events","Ministry","Announcement","Other"];
@@ -968,6 +963,23 @@ const AnnouncementsPage = () => {
     setToast({ msg: "Event added!", type: "success" });
   }
   setSaving(false);
+  };
+
+  const uploadTheme = async () => {
+  if (!themeFile) return;
+  setThemeUploading(true);
+  const ext = themeFile.name.split(".").pop();
+  const path = `theme-${Date.now()}.${ext}`;
+  const { error: upErr } = await supabase.storage.from("theme").upload(path, themeFile, { upsert: true });
+  if (upErr) {
+    setToast({ msg: "Upload failed: " + upErr.message, type: "error" });
+  } else {
+    const { data: { publicUrl } } = supabase.storage.from("theme").getPublicUrl(path);
+    await supabase.from("monthly_theme").update({ image_url: publicUrl, updated_at: new Date().toISOString() }).eq("id", 1);
+    setToast({ msg: "Monthly theme updated!", type: "success" });
+    setThemeFile(null);
+  }
+  setThemeUploading(false);
   };
 
   const deleteEvent = async (id) => {
@@ -1068,6 +1080,17 @@ const AnnouncementsPage = () => {
           </div>
         </div>
       )}
+
+    <Card style={{ marginTop:24, padding:20 }}>
+      <h3 style={{ margin:"0 0 12px", fontWeight:700, fontSize:16, color:C.ink }}>Monthly Theme Image</h3>
+      <input type="file" accept="image/jpeg,image/png" onChange={e => setThemeFile(e.target.files[0])}/>
+      {themeFile && (
+        <div style={{ marginTop:12 }}>
+          <Btn label={themeUploading ? "Uploading…" : "Upload Theme"} onClick={uploadTheme} disabled={themeUploading}/>
+        </div>
+      )}
+    </Card>
+
     </div>
   );
 };
