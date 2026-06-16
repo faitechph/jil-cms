@@ -11,17 +11,58 @@ const C = {
 const R = { xs:"6px", sm:"10px", md:"14px", lg:"18px", xl:"24px", xxl:"32px", full:"9999px" };
 const SH = { sm:"0 2px 8px rgba(0,0,0,.07)", md:"0 4px 20px rgba(0,0,0,.09)" };
 
-const Toast = ({ msg, type = "success", onDone }) => {
-  useEffect(() => { const t = setTimeout(onDone, 3200); return () => clearTimeout(t); }, [onDone]);
-  const bg = type === "error" ? C.rose3 : type === "warn" ? C.amber3 : C.green3;
-  const fg = type === "error" ? C.rose : type === "warn" ? C.amber : C.green;
+/* ─── Toast ─────────────────────────── */
+const Toast = ({ msg, type = "info", onDone }) => {
+  useEffect(() => {
+    const timer = setTimeout(onDone, 3000);
+    return () => clearTimeout(timer);
+  }, [onDone]);
+
+  const config = {
+    success: { bg: C.green, bgLight: C.green3, icon: "✓" },
+    error:   { bg: C.rose2, bgLight: C.rose3, icon: "✕" },
+    warn:    { bg: C.amber2, bgLight: C.amber3, icon: "⚠" },
+    info:    { bg: C.blue, bgLight: C.blue3, icon: "ⓘ" },
+  }[type] || { bg: C.blue, bgLight: C.blue3, icon: "ⓘ" };
+
   return (
-    <div style={{ position:"fixed", bottom:24, left:"50%", transform:"translateX(-50%)",
-      background:bg, color:fg, borderRadius:R.full, padding:"11px 22px", fontSize:13,
-      fontWeight:600, boxShadow:SH.md, zIndex:2000, whiteSpace:"nowrap",
-      animation:"slideUp .25s ease" }}>
-      <style>{`@keyframes slideUp{from{transform:translateX(-50%) translateY(12px);opacity:0}}`}</style>
-      {msg}
+    <div style={{
+      position: "fixed",
+      bottom: 20,
+      left: 20,
+      right: 20,
+      maxWidth: 420,
+      background: config.bgLight,
+      border: `1.5px solid ${config.bg}`,
+      borderRadius: R.lg,
+      padding: "12px 16px",
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      fontSize: 14,
+      color: config.bg,
+      fontWeight: 500,
+      boxShadow: SH.md,
+      zIndex: 2000,
+      animation: "slideUp .3s ease-out",
+    }}>
+      <style>{`@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }`}</style>
+      <span style={{ fontWeight: 700, fontSize: 18 }}>{config.icon}</span>
+      <span style={{ flex: 1 }}>{msg}</span>
+      <button
+        onClick={onDone}
+        style={{
+          background: "transparent",
+          border: "none",
+          color: config.bg,
+          cursor: "pointer",
+          fontSize: 18,
+          padding: 0,
+          lineHeight: 1,
+        }}
+      >
+        ✕
+      </button>
     </div>
   );
 };

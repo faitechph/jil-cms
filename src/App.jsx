@@ -316,7 +316,7 @@ const StatTile = ({ icon:IcoComp, label, value, accent, color=C.blue, sub }) => 
   </Card>
 );
 
-/* ─── Input ─────────────────────────────── */
+/* ─── Input ─────────────────────────── */
 const Inp = ({ label, type="text", value, onChange, placeholder, options, required }) => (
   <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:14 }}>
     <label style={{ fontSize:12, fontWeight:600, color:C.slate, letterSpacing:.2 }}>
@@ -335,7 +335,7 @@ const Inp = ({ label, type="text", value, onChange, placeholder, options, requir
   </div>
 );
 
-/* ─── Button ─────────────────────────────── */
+/* ─── Button ─────────────────────────── */
 const Btn = ({ label, onClick, color=C.blue, outline, icon:IcoComp, sm, full, danger }) => {
   const bg = danger ? C.rose2 : outline ? "transparent" : color;
   const fg = outline ? (danger ? C.rose2 : color) : C.white;
@@ -357,7 +357,7 @@ const Btn = ({ label, onClick, color=C.blue, outline, icon:IcoComp, sm, full, da
   );
 };
 
-/* ─── Modal ─────────────────────────────── */
+/* ─── Modal ─────────────────────────── */
 const Modal = ({ open, onClose, title, children, width=520 }) => {
   if (!open) return null;
   return (
@@ -564,6 +564,61 @@ const QRScanner = ({ onResult }) => {
   );
 };
 
+/* ─── Toast ─────────────────────────── */
+const Toast = ({ msg, type = "info", onDone }) => {
+  useEffect(() => {
+    const timer = setTimeout(onDone, 3000);
+    return () => clearTimeout(timer);
+  }, [onDone]);
+
+  const config = {
+    success: { bg: C.green, bgLight: C.green3, icon: "✓" },
+    error:   { bg: C.rose2, bgLight: C.rose3, icon: "✕" },
+    warn:    { bg: C.amber2, bgLight: C.amber3, icon: "⚠" },
+    info:    { bg: C.blue, bgLight: C.blue3, icon: "ⓘ" },
+  }[type] || { bg: C.blue, bgLight: C.blue3, icon: "ⓘ" };
+
+  return (
+    <div style={{
+      position: "fixed",
+      bottom: 20,
+      left: 20,
+      right: 20,
+      maxWidth: 420,
+      background: config.bgLight,
+      border: `1.5px solid ${config.bg}`,
+      borderRadius: R.lg,
+      padding: "12px 16px",
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      fontSize: 14,
+      color: config.bg,
+      fontWeight: 500,
+      boxShadow: SH.md,
+      zIndex: 2000,
+      animation: "slideUp .3s ease-out",
+    }}>
+      <style>{`@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }`}</style>
+      <span style={{ fontWeight: 700, fontSize: 18 }}>{config.icon}</span>
+      <span style={{ flex: 1 }}>{msg}</span>
+      <button
+        onClick={onDone}
+        style={{
+          background: "transparent",
+          border: "none",
+          color: config.bg,
+          cursor: "pointer",
+          fontSize: 18,
+          padding: 0,
+          lineHeight: 1,
+        }}
+      >
+        ✕
+      </button>
+    </div>
+  );
+};
 
 const MENUS = {
   regular: [
