@@ -1265,24 +1265,46 @@ const ScannerPage = ({ role }) => {
   const mob = useIsMobile();
 
   const recordAttendance = async (parsed) => {
-    if (!parsed.code) return { status: "unknown" };
-    const { data: member } = await supabase
-      .from("members").select("id, name, points")
-      .eq("member_code", parsed.code).maybeSingle();
-    if (!member) return { status: "not_found" };
-    const { data: existing } = await supabase
-      .from("attendance").select("id")
-      .eq("member_id", member.id).eq("service_date", today).maybeSingle();
-    if (existing) return { status: "already" };
-    const { error } = await supabase.from("attendance").insert({
-      member_id: member.id, service_date: today,
-      present: true, checked_in_at: new Date().toISOString(),
-    });
-    if (error) return { status: "error", msg: error.message };
-    await supabase.from("members")
-      .update({ points: (member.points || 0) + 10 }).eq("id", member.id);
-    return { status: "ok" };
-  };
+  if (!parsed.code) return { status: "unknown" };
+
+  const { data: member } = await supabase
+    .from("members")
+    .select("id, name, points, branch_id")
+    .eq("member_code", parsed.code)
+    .maybeSingle();
+  if (!member) return { status: "not_found" };
+
+  const { data: existing } = await supabase
+    .from("attendance").select("id")
+    .eq("member_id", member.id).eq("service_date", today).maybeSingle();
+  if (existing) return { status: "already" };
+
+  // Find the active service event for today
+  const { data: eventRow } = await supabase
+    .from("service_events")
+    .select("id")
+    .eq("date", today)
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { error } = await supabase.from("attendance").insert({
+    member_id:    member.id,
+    branch_id:    member.branch_id || null,
+    event_id:     eventRow?.id || null,
+    service_date: today,
+    present:      true,
+  });
+
+  if (error) return { status: "error", msg: error.message };
+
+  await supabase.from("members")
+    .update({ points: (member.points || 0) + 10 })
+    .eq("id", member.id);
+
+  return { status: "ok" };
+};
 
   const handleScan = useCallback(async (raw) => {
     let parsed = { raw };
