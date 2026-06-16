@@ -415,6 +415,7 @@ const QRScanner = ({ onResult }) => {
 
   const [status,   setStatus]   = useState("idle"); // idle | live | error
   const [scanning, setScanning] = useState(false);
+  const timeoutRef = useRef(null);
 
   const stop = useCallback(() => {
     if (rafRef.current)    cancelAnimationFrame(rafRef.current);
@@ -437,6 +438,8 @@ const QRScanner = ({ onResult }) => {
       }
       setStatus("live");
       setScanning(true);
+      // Auto-close after 10 seconds if nothing scanned
+      timeoutRef.current = setTimeout(() => stop(), 10000);
     } catch {
       setStatus("error");
     }
@@ -464,23 +467,28 @@ const QRScanner = ({ onResult }) => {
         if (code && code.data !== lastRef.current) {
           lastRef.current = code.data;
           onResult(code.data);
-          // Reset debounce after 3s
-          setTimeout(() => { lastRef.current = null; }, 3000);
+          // Reset 10s timeout on each scan
+          if (timeoutRef.current) clearTimeout(timeoutRef.current);
+          timeoutRef.current = setTimeout(() => stop(), 10000);
         }
         rafRef.current = requestAnimationFrame(tick);
       };
-      rafRef.current = requestAnimationFrame(tick);
-    };
 
     // Try to import jsQR (assumes it's installed)
     import("jsqr").then(mod => runLoop(mod.default)).catch(() => {
       console.warn("jsQR not available — camera scan disabled");
     });
+  };
+
+      runLoop && import("jsqr").then(mod => runLoop(mod.default));
 
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
   }, [scanning, onResult]);
 
-  useEffect(() => () => stop(), [stop]);
+  useEffect(() => () => {
+  stop();
+  if (timeoutRef.current) clearTimeout(timeoutRef.current);
+  }, [stop]);
 
   return (
     <div>
