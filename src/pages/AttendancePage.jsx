@@ -124,9 +124,11 @@ const Modal = ({ open, onClose, title, children, width=500 }) => {
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0,
       background:"rgba(10,15,30,.5)", backdropFilter:"blur(6px)",
-      zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+      zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16,
+      boxSizing:"border-box" }}>
       <div onClick={e=>e.stopPropagation()} style={{ background:C.white, borderRadius:R.xxl,
-        boxShadow:SH.lg, width:"100%", maxWidth:width, maxHeight:"92vh", overflowY:"auto" }}>
+        boxShadow:SH.lg, width:"100%", maxWidth:width, maxHeight:"92vh", overflowY:"auto",
+        overflowX:"hidden", boxSizing:"border-box" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
           padding:"22px 24px 0" }}>
           <h3 style={{ margin:0, fontWeight:800, fontSize:17, color:C.ink }}>{title}</h3>
@@ -134,7 +136,7 @@ const Modal = ({ open, onClose, title, children, width=500 }) => {
             width:32, height:32, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center",
             fontSize:16, color:C.slate }}>✕</button>
         </div>
-        <div style={{ padding:"16px 24px 28px" }}>{children}</div>
+        <div style={{ padding:"16px 24px 28px", boxSizing:"border-box", width:"100%" }}>{children}</div>
       </div>
     </div>
   );
@@ -358,7 +360,7 @@ function WalkInModal({ open, onClose, activeEvent, onSuccess }) {
         </div>
       )}
 
-      <div style={{ display:"flex", gap:10, marginTop:4 }}>
+      <div style={{ display:"flex", gap:10, marginTop:4, flexWrap:"wrap" }}>
         <Btn label="Cancel" onClick={handleClose} outline full sm/>
         <Btn label={saving ? "Checking in…" : "Check In"} onClick={handleCheckin}
           disabled={!selected || saving} full sm/>
@@ -552,7 +554,7 @@ function ManualOverrideModal({ open, onClose, onSuccess }) {
             border:`1.5px solid ${C.cloud}`, fontSize:14, outline:"none", color:C.ink }}/>
       </div>
 
-      <div style={{ display:"flex", gap:10 }}>
+      <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
         <Btn label="Cancel" onClick={handleClose} outline full sm/>
         <Btn label={saving ? "Saving…" : "Save Override"} onClick={handleSubmit}
           disabled={!selected || !date || saving} full sm color={C.amber2}/>
