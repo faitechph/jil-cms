@@ -862,11 +862,11 @@ export default function MembersPage({ role }) {
             </div>
             <Inp label="Lifegroup Leader" value={form.lifegroup_leader}
               onChange={v=>setForm({...form,lifegroup_leader:v})} placeholder="e.g. Ptr. Rico Cruz"/>
-            <div style={{ display:"flex", gap:8, marginTop:4 }}>
+            <div style={{ display:"flex", gap:8, marginTop:4,flexWrap:"wrap" }}>
               <Btn label={saving?"Saving…":(editId?"Save Changes":"Add Member")}
                 onClick={save} disabled={saving} full
                 icon={({size,color})=><svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}/>
-              <Btn label="Cancel" onClick={()=>{ setShowModal(false); setEditId(null); }} outline/>
+              <Btn label="Cancel" onClick={()=>{ setShowModal(false); setEditId(null); }} outline full/>
             </div>
           </>
         )}
