@@ -1135,53 +1135,94 @@ const FinancePage = ({ role, user }) => {
       </div>
 
       {tab==="overview" && (
+  <>
+    {/* ── Hero Total ── */}
+    <Card style={{ background:"linear-gradient(135deg,#1D4ED8,#7C3AED)", border:"none", marginBottom:16 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:12 }}>
+        <div>
+          <div style={{ color:"rgba(255,255,255,.6)", fontSize:12, marginBottom:4 }}>
+            {isAdmin ? "Total Collected" : "My Total Giving"} — {new Date().toLocaleString("default",{month:"long",year:"numeric"})}
+          </div>
+          <div style={{ color:"#fff", fontSize:38, fontWeight:800, letterSpacing:-1, lineHeight:1 }}>
+            ₱{grandTotal.toLocaleString()}
+          </div>
+          <div style={{ color:"rgba(255,255,255,.5)", fontSize:12, marginTop:6 }}>
+            {records.length} transaction{records.length!==1?"s":""} recorded
+          </div>
+        </div>
+        <div style={{ textAlign:"right" }}>
+          <TreeGrowth points={pts+200} size={64}/>
+          {!isAdmin && <div style={{ color:"rgba(255,255,255,.6)", fontSize:11, marginTop:4 }}>{pts} faithfulness pts</div>}
+        </div>
+      </div>
+    </Card>
+
+    {/* ── Stat Tiles ── */}
+    <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:12, marginBottom:16 }}>
+      {isAdmin ? (
         <>
-          {!isAdmin && (
-            <div style={{ display:"grid", gridTemplateColumns:mob?"1fr":"1fr 1fr", gap:14, marginBottom:18 }}>
-              <Card style={{ background:`linear-gradient(135deg,#15803D,#16A34A)`, border:"none" }}>
-                <div style={{ color:"rgba(255,255,255,.6)", fontSize:12 }}>My Total Giving</div>
-                <div style={{ color:"#fff", fontSize:30, fontWeight:800, margin:"4px 0" }}>₱{myTotal.toLocaleString()}</div>
-                <div style={{ color:"rgba(255,255,255,.6)", fontSize:12 }}>{myData.length} transactions</div>
-              </Card>
-              <Card>
-                <div style={{ color:C.slate, fontSize:12, marginBottom:6 }}>Faithfulness Points</div>
-                <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                  <TreeGrowth points={pts+200} size={52}/>
-                  <div>
-                    <div style={{ fontSize:26, fontWeight:800, color:C.amber2 }}>{pts} pts</div>
-                    <div style={{ fontSize:12, color:C.green }}>Every ₱100 = 5 points</div>
-                  </div>
-                </div>
-              </Card>
-            </div>
-          )}
-          {isAdmin && (
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:12, marginBottom:18 }}>
-              <StatTile icon={Ico.finance} label="Total Collected" value={`₱${grandTotal.toLocaleString()}`} color={C.green}/>
-              <StatTile icon={Ico.users}   label="Contributors"    value={new Set(records.map(f=>f.member_id)).size} color={C.blue}/>
-              <StatTile icon={Ico.report}  label="Transactions"    value={records.length} color={C.violet2}/>
-            </div>
-          )}
-          <Card>
-            <h3 style={{ margin:"0 0 14px", fontWeight:700, fontSize:14, color:C.ink }}>Giving Breakdown</h3>
-            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-              {totals.map((t,i)=>{
-                const colors=[C.blue,C.violet2,C.green,C.amber,C.rose2,"#0891B2","#D97706"];
-                const c = colors[i%colors.length];
-                return (
-                  <div key={t.type}>
-                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
-                      <span style={{ fontSize:13, fontWeight:500, color:C.ink }}>{t.type}</span>
-                      <span style={{ fontWeight:700, color:c, fontSize:13 }}>₱{t.total.toLocaleString()}</span>
-                    </div>
-                    <Bar value={t.total} max={Math.max(...totals.map(x=>x.total))||1} color={c}/>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
+          <StatTile icon={Ico.finance} label="Total Collected"  value={`₱${grandTotal.toLocaleString()}`}             color={C.green}/>
+          <StatTile icon={Ico.users}   label="Contributors"     value={new Set(records.map(f=>f.member_id)).size}      color={C.blue}/>
+          <StatTile icon={Ico.report}  label="Transactions"     value={records.length}                                 color={C.violet2}/>
+          <StatTile icon={Ico.finance} label="Avg per Giver"
+            value={`₱${new Set(records.map(f=>f.member_id)).size
+              ? Math.round(grandTotal/new Set(records.map(f=>f.member_id)).size).toLocaleString()
+              : 0}`}
+            color={C.amber}/>
+        </>
+      ) : (
+        <>
+          <StatTile icon={Ico.finance}    label="Total Given"       value={`₱${myTotal.toLocaleString()}`} color={C.green}/>
+          <StatTile icon={Ico.report}     label="Transactions"      value={records.length}                  color={C.blue}/>
+          <StatTile icon={Ico.star}       label="Faith Points"      value={`${pts} pts`}                    color={C.amber2}/>
+          <StatTile icon={Ico.attendance} label="Giving Streak"
+            value={`${Math.min(records.length,4)} wks`}
+            color={C.violet2}/>
         </>
       )}
+    </div>
+
+    {/* ── Giving Breakdown ── */}
+    <Card>
+      <h3 style={{ margin:"0 0 16px", fontWeight:700, fontSize:14, color:C.ink }}>Giving Breakdown</h3>
+      <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+        {totals.filter(t=>t.total>0).length === 0
+          ? <div style={{ textAlign:"center", padding:"24px 0", color:C.mist, fontSize:13 }}>No giving records yet.</div>
+          : totals.map((t,i)=>{
+            const colors=[C.blue,C.violet2,C.green,C.amber,C.rose2,"#0891B2","#D97706"];
+            const c = colors[i%colors.length];
+            const pct = grandTotal ? Math.round(t.total/grandTotal*100) : 0;
+            return (
+              <div key={t.type}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <div style={{ width:8, height:8, borderRadius:"50%", background:c, flexShrink:0 }}/>
+                    <span style={{ fontSize:13, fontWeight:500, color:C.ink }}>{t.type}</span>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                    <span style={{ fontSize:11, color:C.mist }}>{pct}%</span>
+                    <span style={{ fontWeight:700, color:c, fontSize:13, minWidth:80, textAlign:"right" }}>
+                      ₱{t.total.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+                <Bar value={t.total} max={Math.max(...totals.map(x=>x.total))||1} color={c} height={8}/>
+              </div>
+            );
+          })
+        }
+      </div>
+
+      {/* Totals footer */}
+      {grandTotal > 0 && (
+        <div style={{ marginTop:18, paddingTop:14, borderTop:`1px solid ${C.fog}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <span style={{ fontSize:12, color:C.slate, fontWeight:600 }}>Grand Total</span>
+          <span style={{ fontSize:18, fontWeight:800, color:C.ink }}>₱{grandTotal.toLocaleString()}</span>
+        </div>
+      )}
+    </Card>
+  </>
+)}
 
       {tab==="give" && (
         <Card style={{ maxWidth:460 }}>
