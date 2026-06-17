@@ -377,7 +377,7 @@ export default function MembersPage({ role }) {
       address:          get("Address") || "",
       category:         matchOption(get("Category"), CATEGORIES),
       type:             matchOption(get("Type", "membertype"), MEMBER_TYPES),
-      branch:           branch: branches.find(b => b.name.toLowerCase().includes((get("Branch")||"").toLowerCase()))?.name || (branches[0]?.name || ""),
+      branch:           branches.find(b => b.name.toLowerCase().includes((get("Branch")||"").toLowerCase()))?.name || (branches[0]?.name || ""),
       lifegroup_leader: get("Lifegroup Leader", "lifegroupleader", "leader", "cellleader") || "",
       is_active:        true,
     };
