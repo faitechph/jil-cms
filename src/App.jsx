@@ -1906,6 +1906,9 @@ const deleteBranch = async (b) => {
 
   return (
     <div>
+
+    {toast && <Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
+
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
         <h2 style={{ margin:0, fontWeight:800, fontSize:20, color:C.ink }}>Church Branches</h2>
         <Btn label="Add Branch" icon={Ico.plus} onClick={()=>setModal(true)} sm/>
@@ -2011,6 +2014,7 @@ const UserManagementPage = ({ role }) => {
   const [toast, setToast] = useState(null);
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("all");
+  const [toast, setToast] = useState(null);
   const mob = useIsMobile();
 
   useEffect(() => {
