@@ -1114,10 +1114,26 @@ const FinancePage = ({ role, user }) => {
   const mob = useIsMobile();
 
   useEffect(() => {
-    const q = isAdmin
-      ? supabase.from("giving").select("*, members(name, branch)").order("created_at", { ascending: false })
-      : supabase.from("giving").select("*").eq("member_id", user.memberId).order("created_at", { ascending: false });
-    q.then(({ data }) => { if (data) setRecords(data); });
+  let q;
+  if (role === "superadmin") {
+    // all branches
+    q = supabase.from("giving")
+      .select("*, members(name, branch)")
+      .order("created_at", { ascending: false });
+  } else if (role === "admin") {
+    // their branch only
+    q = supabase.from("giving")
+      .select("*, members(name, branch)")
+      .eq("branch_id", user.branchId)
+      .order("created_at", { ascending: false });
+  } else {
+    // their own records only
+    q = supabase.from("giving")
+      .select("*")
+      .eq("member_id", user.memberId)
+      .order("created_at", { ascending: false });
+  }
+  q.then(({ data }) => { if (data) setRecords(data); });
   }, []);
 
   const myData = records;
@@ -1258,8 +1274,9 @@ const FinancePage = ({ role, user }) => {
                       note: form.note,
                       date: new Date().toISOString().split("T")[0],
                       member_id: user.memberId,
+                      branch_id: user.branchId,
                     }])
-                    .select("*, members(name, branch)")  // ← join members on insert
+                    .select("*, members(name, branch)")
                     .single();
 
                   console.log("giving insert →", { data, error });
@@ -1826,29 +1843,105 @@ const EventsPage = () => {
 /* ── BRANCHES ──────────────────────────── */
 const BranchesPage = () => {
   const mob = useIsMobile();
+  const [branches, setBranches] = useState([]);
+  const [modal, setModal] = useState(false);
+  const [form, setForm] = useState({ name:"", address:"", parent_id:"" });
+  const [saving, setSaving] = useState(false);
   const colors=[C.blue,C.violet2,C.green,C.amber,C.rose2];
+
+  useEffect(() => {
+    supabase.from("branches").select("*").order("name")
+      .then(({ data }) => { if (data) setBranches(data); });
+  }, []);
+
+  const mainBranches = branches.filter(b => !b.parent_id);
+  const subOf = (parentId) => branches.filter(b => b.parent_id === parentId);
+
+  const addBranch = async () => {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    const { data, error } = await supabase.from("branches")
+      .insert([{ name: form.name, address: form.address, parent_id: form.parent_id || null }])
+      .select().single();
+    if (error) alert("Failed: " + error.message);
+    else {
+      setBranches(prev => [...prev, data]);
+      setForm({ name:"", address:"", parent_id:"" });
+      setModal(false);
+    }
+    setSaving(false);
+  };
+
   return (
     <div>
-      <h2 style={{ margin:"0 0 18px", fontWeight:800, fontSize:20, color:C.ink }}>Church Branches</h2>
-      <div style={{ display:"grid", gridTemplateColumns:`repeat(auto-fill,minmax(${mob?220:240}px,1fr))`, gap:14 }}>
-        {BRANCHES.map((b,i)=>{
-          const m=SEED_MEMBERS.filter(x=>x.branch===b).length;
-          const att=[127,34,28,19,22][i];
-          return (
-            <Card key={b} hoverable>
-              <div style={{ width:40,height:40,borderRadius:R.md,background:`${colors[i]}12`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12 }}>
-                <Ico.map size={18} color={colors[i]}/>
-              </div>
-              <div style={{ fontWeight:700, fontSize:14, color:C.ink, marginBottom:2 }}>{b}</div>
-              <div style={{ fontSize:12, color:C.mist, marginBottom:12 }}>Pinamalayan, Oriental Mindoro</div>
-              <div style={{ display:"flex", gap:16 }}>
-                <div><div style={{ fontSize:22, fontWeight:800, color:colors[i] }}>{m}</div><div style={{ fontSize:11, color:C.mist }}>Members</div></div>
-                <div><div style={{ fontSize:22, fontWeight:800, color:colors[i] }}>{att}</div><div style={{ fontSize:11, color:C.mist }}>Last Att.</div></div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
+        <h2 style={{ margin:0, fontWeight:800, fontSize:20, color:C.ink }}>Church Branches</h2>
+        <Btn label="Add Branch" icon={Ico.plus} onClick={()=>setModal(true)} sm/>
+      </div>
+
+      {mainBranches.map((b, i) => {
+        const subs = subOf(b.id);
+        return (
+          <div key={b.id} style={{ marginBottom:16 }}>
+            {/* Main branch card */}
+            <Card style={{ borderLeft:`4px solid ${colors[i%colors.length]}`, marginBottom: subs.length ? 0 : 0, borderBottomLeftRadius: subs.length ? 0 : R.xl, borderBottomRightRadius: subs.length ? 0 : R.xl }}>
+              <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+                <div style={{ width:42, height:42, borderRadius:R.md, background:`${colors[i%colors.length]}12`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                  <Ico.map size={20} color={colors[i%colors.length]}/>
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:700, fontSize:15, color:C.ink }}>{b.name}</div>
+                  {b.address && <div style={{ fontSize:12, color:C.mist }}>{b.address}</div>}
+                </div>
+                <Badge label={`${subs.length} sub-branch${subs.length!==1?"es":""}`} color={colors[i%colors.length]}/>
               </div>
             </Card>
-          );
-        })}
+
+            {/* Sub-branches */}
+            {subs.map((s, si) => (
+              <div key={s.id} style={{ display:"flex", marginLeft:24 }}>
+                {/* Connector line */}
+                <div style={{ width:24, display:"flex", flexDirection:"column", alignItems:"center", flexShrink:0 }}>
+                  <div style={{ width:2, flex:1, background:C.fog }}/>
+                  <div style={{ width:16, height:2, background:C.fog }}/>
+                  {si < subs.length-1 && <div style={{ width:2, flex:1, background:C.fog }}/>}
+                </div>
+                <Card style={{ flex:1, marginBottom: si < subs.length-1 ? 6 : 0, padding:"12px 16px", background:C.fog, border:"none", boxShadow:"none", borderRadius:R.md }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                    <Ico.branch size={15} color={C.slate}/>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontWeight:600, fontSize:13, color:C.ink }}>{s.name}</div>
+                      {s.address && <div style={{ fontSize:11, color:C.mist }}>{s.address}</div>}
+                    </div>
+                    <Badge label="Sub-branch" color={C.slate}/>
+                  </div>
+                </Card>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+
+      {/* Add Branch Modal */}
+      <Modal open={modal} onClose={()=>setModal(false)} title="Add Branch / Sub-branch">
+              <Inp label="Branch Name" value={form.name} onChange={v=>setForm({...form,name:v})} placeholder="e.g. Barangay Sto. Tomas" required/>
+              <Inp label="Address (optional)" value={form.address} onChange={v=>setForm({...form,address:v})} placeholder="e.g. Sto. Tomas, Pinamalayan"/>
+              <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:14 }}>
+        <label style={{ fontSize:12, fontWeight:600, color:C.slate }}>Parent Branch (leave blank for main branch)</label>
+        <select value={form.parent_id} onChange={e=>setForm({...form,parent_id:e.target.value})}
+          style={{ padding:"10px 14px", border:`1.5px solid ${C.fog}`, borderRadius:R.md, fontSize:14, outline:"none", background:C.white, color:C.ink }}>
+          <option value="">— Main Branch (no parent) —</option>
+          {mainBranches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
+        </select>
       </div>
+        {/* Show branch names instead of IDs */}
+        {form.parent_id && (
+          <div style={{ marginTop:-10, marginBottom:14, fontSize:12, color:C.green }}>
+            ✓ Sub-branch of: {mainBranches.find(b=>b.id===form.parent_id)?.name}
+          </div>
+        )}
+        <Btn label={saving?"Saving…":"Add Branch"} icon={Ico.plus} onClick={addBranch} full/>
+      </Modal>
     </div>
   );
 };
@@ -1901,6 +1994,8 @@ export default function App() {
     id: auth.user.id,
     email: auth.user.email,
     memberId: auth.profile.member_id, 
+    branch: auth.profile.branch,     
+    branchId: auth.profile.branch_id,
     };
     switch(page) {
   case "dashboard":      return <Dashboard       role={role} user={user}/>;
