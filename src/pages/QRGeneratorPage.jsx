@@ -16,7 +16,14 @@ const C = {
 const R = { xs:"6px", sm:"10px", md:"14px", lg:"18px", xl:"24px", xxl:"32px", full:"9999px" };
 const SH = { sm:"0 2px 8px rgba(0,0,0,.07)", md:"0 4px 20px rgba(0,0,0,.09)", lg:"0 8px 40px rgba(0,0,0,.13)" };
 
-const BRANCHES = ["Main – Pinamalayan","Sta. Rita","Buli","Inclanay","Luma"];
+const [branches,    setBranches]    = useState([]);
+
+// add inside the existing useEffect that calls fetchEvents():
+useEffect(() => {
+  fetchEvents();
+  supabase.from("branches").select("*, parent:parent_id(name)").order("name")
+    .then(({ data }) => { if (data) setBranches(data); });
+}, [fetchEvents]);
 
 // ── Shared components ────────────────────────────────────────
 const Inp = ({ label, type="text", value, onChange, required, options }) => (
@@ -426,7 +433,22 @@ export default function QRGeneratorPage() {
             <Inp label="Service Time" type="time" value={serviceTime} onChange={setServiceTime}/>
             <Inp label="Expiry" type="datetime-local" value={expiry} onChange={setExpiry}/>
           </div>
-          <Inp label="Branch" value={branch} onChange={setBranch} options={BRANCHES}/>
+          <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:16 }}>
+            <label style={{ fontSize:12, fontWeight:600, color:C.slate, letterSpacing:.2 }}>Branch</label>
+            <select value={branch} onChange={e=>setBranch(e.target.value)}
+              style={{ padding:"10px 14px", border:`1.5px solid ${C.cloud}`, borderRadius:R.md,
+                fontSize:14, outline:"none", background:C.white, color:C.ink }}>
+              <option value="">— Select Branch —</option>
+              {branches.filter(b=>!b.parent_id).map(b=>(
+                <optgroup key={b.id} label={b.name}>
+                  <option value={b.name}>{b.name} (Main)</option>
+                  {branches.filter(s=>s.parent_id===b.id).map(s=>(
+                    <option key={s.id} value={s.name}>↳ {s.name}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
 
           <button onClick={goLive} disabled={loading}
             style={{ width:"100%", padding:"13px 0", borderRadius:R.full,
