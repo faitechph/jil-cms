@@ -225,7 +225,7 @@ export default function MembersPage({ role }) {
   const [form, setForm] = useState({
     name:"", birthdate:"", address:"",
     category:"Official Member", type:"Young Adult",
-    branch:"Main – Pinamalayan", lifegroup_leader:""
+    branch:"", lifegroup_leader:""
   });
   const [uploadState, setUploadState] = useState({ status:"idle", rows:[], error:"" });
   const [branches, setBranches] = useState([]);
@@ -325,7 +325,7 @@ export default function MembersPage({ role }) {
     setShowModal(false);
     setEditId(null);
     setForm({ name:"", birthdate:"", address:"", category:"Official Member",
-              type:"Young Adult", branch:"Main – Pinamalayan", lifegroup_leader:"" });
+              type:"Young Adult", branch:"", lifegroup_leader:"" });
     fetchMembers();
   };
 
@@ -343,7 +343,7 @@ export default function MembersPage({ role }) {
       address:          m.address || "",
       category:         m.category || "Official Member",
       type:             m.type || "Young Adult",
-      branch:           m.branch || BRANCHES[0],
+      branch:           m.branch || "",
       lifegroup_leader: m.lifegroup_leader || "",
     });
     setEditId(m.id);
@@ -377,7 +377,7 @@ export default function MembersPage({ role }) {
       address:          get("Address") || "",
       category:         matchOption(get("Category"), CATEGORIES),
       type:             matchOption(get("Type", "membertype"), MEMBER_TYPES),
-      branch:           BRANCHES.find(b => b.toLowerCase().includes((get("Branch")||"").toLowerCase())) || BRANCHES[0],
+      branch:           branch: branches.find(b => b.name.toLowerCase().includes((get("Branch")||"").toLowerCase()))?.name || (branches[0]?.name || ""),
       lifegroup_leader: get("Lifegroup Leader", "lifegroupleader", "leader", "cellleader") || "",
       is_active:        true,
     };
@@ -844,8 +844,22 @@ export default function MembersPage({ role }) {
               <Inp label="Type" value={form.type} onChange={v=>setForm({...form,type:v})}
                 options={MEMBER_TYPES} required/>
             </div>
-            <Inp label="Branch" value={form.branch} onChange={v=>setForm({...form,branch:v})}
-              options={BRANCHES}/>
+            <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:14 }}>
+              <label style={{ fontSize:12, fontWeight:600, color:C.slate, letterSpacing:.2 }}>Branch</label>
+              <select value={form.branch} onChange={e=>setForm({...form,branch:e.target.value})}
+                style={{ padding:"10px 14px", border:`1.5px solid ${C.fog}`, borderRadius:R.md,
+                  fontSize:14, outline:"none", background:C.white, color:C.ink, appearance:"none" }}>
+                <option value="">— Select Branch —</option>
+                {branches.filter(b=>!b.parent_id).map(b=>(
+                  <optgroup key={b.id} label={b.name}>
+                    <option value={b.name}>{b.name} (Main)</option>
+                    {branches.filter(s=>s.parent_id===b.id).map(s=>(
+                      <option key={s.id} value={s.name}>↳ {s.name}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
             <Inp label="Lifegroup Leader" value={form.lifegroup_leader}
               onChange={v=>setForm({...form,lifegroup_leader:v})} placeholder="e.g. Ptr. Rico Cruz"/>
             <div style={{ display:"flex", gap:8, marginTop:4 }}>
