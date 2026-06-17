@@ -1242,22 +1242,34 @@ const FinancePage = ({ role, user }) => {
               <Inp label="Amount (₱)" type="number" value={form.amount} onChange={v=>setForm({...form,amount:v})} placeholder="0.00"/>
               <Inp label="Note (optional)" value={form.note} onChange={v=>setForm({...form,note:v})} placeholder="e.g. Sunday June 8"/>
               <Btn label="Submit Giving" icon={Ico.send} onClick={async () => {
-                if (!form.amount || !form.type) return;
-                const { data, error } = await supabase.from("giving").insert([{
-                  type: form.type,
-                  amount: parseFloat(form.amount),
-                  note: form.note,
-                  date: new Date().toISOString().split("T")[0],
-                  member_id: user.memberId || null,
-                }]).select();
-                console.log("giving insert →", { data, error });
-                if (error) alert("Failed: " + error.message);
-                else {
-                  setDone(true);
-                  setForm({ type:"Tithes", amount:"", note:"" });
-                  if (data?.[0]) setRecords(prev => [data[0], ...prev]);
-                }
-              }} full/>
+                  if (!form.amount || !form.type) return;
+                  
+                  // Check memberId before insert
+                  if (!user.memberId) {
+                    alert("Your account isn't linked to a member record. Ask an admin to link your profile.");
+                    return;
+                  }
+
+                  const { data, error } = await supabase
+                    .from("giving")
+                    .insert([{
+                      type: form.type,
+                      amount: parseFloat(form.amount),
+                      note: form.note,
+                      date: new Date().toISOString().split("T")[0],
+                      member_id: user.memberId,
+                    }])
+                    .select("*, members(name, branch)")  // ← join members on insert
+                    .single();
+
+                  console.log("giving insert →", { data, error });
+                  if (error) alert("Failed: " + error.message);
+                  else {
+                    setDone(true);
+                    setForm({ type:"Tithes", amount:"", note:"" });
+                    setRecords(prev => [data, ...prev]);  // ← data now has members populated
+                  }
+                }} full/>
             </>
           )}
         </Card>
