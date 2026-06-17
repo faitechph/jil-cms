@@ -92,11 +92,12 @@ const Btn = ({ label, onClick, color=C.blue, outline, icon:IcoComp, sm, full, da
   const fg = disabled?C.mist:outline?(danger?C.rose2:color):C.white;
   const brd = disabled?C.cloud:danger?C.rose2:color;
   return (
-    <button onClick={disabled?undefined:onClick} disabled={disabled} style={{ display:"flex", alignItems:"center", gap:6,
-      justifyContent:"center", padding:sm?"7px 14px":"10px 20px", background:bg, color:fg,
-      border:`1.5px solid ${brd}`, borderRadius:R.full, fontWeight:600, fontSize:sm?12:14,
-      cursor:disabled?"not-allowed":"pointer", transition:"all .15s", width:full?"100%":"auto",
-      flexShrink:0, opacity:disabled?.6:1 }}>
+    <button onClick={disabled?undefined:onClick} disabled={disabled}
+      style={{ display:"flex", alignItems:"center", gap:6, justifyContent:"center",
+        padding:sm?"7px 14px":"10px 20px", background:bg, color:fg,
+        border:`1.5px solid ${brd}`, borderRadius:R.full, fontWeight:600,
+        fontSize:sm?12:14, cursor:disabled?"not-allowed":"pointer",
+        transition:"all .15s", width:full?"100%":"auto", flexShrink:0 }}>
       {IcoComp && <IcoComp size={sm?13:15} color={fg}/>} {label}
     </button>
   );
