@@ -2275,7 +2275,9 @@ const SettingsPage = ({ role }) => {
   if (subPage === "users") return (
     <div>
       <button onClick={()=>setSubPage(null)}
-        style={{ display:"flex", alignItems:"center", gap:6, border:"none", background:"transparent", cursor:"pointer", color:C.blue, fontWeight:600, fontSize:13, marginBottom:16, padding:0 }}>
+        style={{ display:"flex", alignItems:"center", gap:6, border:"none",
+          background:"transparent", cursor:"pointer", color:C.blue,
+          fontWeight:600, fontSize:13, marginBottom:16, padding:0 }}>
         ← Back to Settings
       </button>
       <UserManagementPage role={role}/>
@@ -2283,10 +2285,10 @@ const SettingsPage = ({ role }) => {
   );
 
   const items = [
-    { key:"users",  I:Ico.users,   label:"User Management",    desc:"Add, edit, deactivate CMS accounts",           color:C.blue },
-    { key:null,     I:Ico.branch,  label:"Branch Management",  desc:"Configure branch details and leaders",         color:C.violet2 },
-    { key:null,     I:Ico.finance, label:"Finance Categories", desc:"Edit giving types and fund labels",            color:C.green },
-    { key:null,     I:Ico.shield,  label:"Roles & Permissions",desc:"Control access by role level",                 color:C.amber },
+    { key:"users", I:Ico.users,   label:"User Management",    desc:"Add, edit, deactivate CMS accounts",           color:C.blue },
+    { key:null,    I:Ico.branch,  label:"Branch Management",  desc:"Configure branch details and leaders",         color:C.violet2 },
+    { key:null,    I:Ico.finance, label:"Finance Categories", desc:"Edit giving types and fund labels",            color:C.green },
+    { key:null,    I:Ico.shield,  label:"Roles & Permissions",desc:"Control access by role level",                 color:C.amber },
     ...(role==="superadmin"?[{ key:null, I:Ico.upload, label:"Bulk Data Upload", desc:"Upload CSV/Excel for members, finance, attendance", color:C.rose2 }]:[]),
   ];
 
@@ -2295,7 +2297,9 @@ const SettingsPage = ({ role }) => {
       <h2 style={{ margin:"0 0 18px", fontWeight:800, fontSize:20, color:C.ink }}>Settings</h2>
       <div style={{ display:"flex", flexDirection:"column", gap:10, maxWidth:520 }}>
         {items.map(s=>(
-          <Card key={s.label} onClick={()=>s.key ? setSubPage(s.key) : alert(`Opening: ${s.label}`)} hoverable style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 18px" }}>
+          <Card key={s.label}
+            onClick={()=>s.key ? setSubPage(s.key) : alert(`Opening: ${s.label}`)}
+            hoverable style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 18px" }}>
             <div style={{ width:40,height:40,borderRadius:R.md,background:`${s.color}12`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
               <s.I size={18} color={s.color}/>
             </div>
