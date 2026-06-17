@@ -1962,7 +1962,7 @@ const UserManagementPage = ({ role }) => {
 
   useEffect(() => {
     Promise.all([
-      supabase.from("profiles").select("id, name, role, branch_id, member_id, email, branches(name)").order("name"),
+      supabase.from("profiles").select("id, name, role, branch_id, member_id, branches(name)").order("name"),
       supabase.from("members").select("id, name, member_code").order("name"),
       supabase.from("branches").select("id, name").order("name"),
     ]).then(([u, m, b]) => {
