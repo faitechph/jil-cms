@@ -1946,21 +1946,356 @@ const BranchesPage = () => {
   );
 };
 
+const UserManagementPage = ({ role }) => {
+  const [users, setUsers] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [form, setForm] = useState({ name:"", email:"", role:"regular", branch_id:"", member_id:"" });
+  const [branches, setBranches] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [search, setSearch] = useState("");
+  const [filterRole, setFilterRole] = useState("all");
+  const mob = useIsMobile();
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from("profiles").select("*, branches(name)").order("name"),
+      supabase.from("members").select("id, name, member_code").order("name"),
+      supabase.from("branches").select("id, name").order("name"),
+    ]).then(([u, m, b]) => {
+      if (u.data) setUsers(u.data);
+      if (m.data) setMembers(m.data);
+      if (b.data) setBranches(b.data);
+      setLoading(false);
+    });
+  }, []);
+
+  const openEdit = (u) => {
+    setSelected(u);
+    setForm({ name:u.name||"", email:u.email||"", role:u.role||"regular", branch_id:u.branch_id||"", member_id:u.member_id||"" });
+    setModal("edit");
+  };
+
+  const openInvite = () => {
+    setSelected(null);
+    setForm({ name:"", email:"", role:"regular", branch_id:"", member_id:"" });
+    setModal("invite");
+  };
+
+  const saveUser = async () => {
+    setSaving(true);
+    if (modal === "edit") {
+      const { error } = await supabase.from("profiles").update({
+        name: form.name,
+        role: form.role,
+        branch_id: form.branch_id || null,
+        member_id: form.member_id || null,
+      }).eq("id", selected.id);
+      if (error) {
+        setToast({ msg:"Update failed: " + error.message, type:"error" });
+      } else {
+        setUsers(prev => prev.map(u => u.id === selected.id
+          ? { ...u, ...form, branches: branches.find(b=>b.id===form.branch_id) }
+          : u
+        ));
+        setToast({ msg:`${form.name} updated`, type:"success" });
+        setModal(null);
+      }
+    } else {
+      const { error } = await supabase.auth.admin?.inviteUserByEmail?.(form.email);
+      if (error) setToast({ msg:"Invite failed: " + error.message, type:"error" });
+      else { setToast({ msg:`Invite sent to ${form.email}`, type:"success" }); setModal(null); }
+    }
+    setSaving(false);
+  };
+
+  const deactivateUser = async (u) => {
+    if (!confirm(`Deactivate ${u.name}? They won't be able to log in.`)) return;
+    const { error } = await supabase.from("profiles").update({ role:"deactivated" }).eq("id", u.id);
+    if (error) { setToast({ msg:"Failed: " + error.message, type:"error" }); return; }
+    setUsers(prev => prev.map(x => x.id===u.id ? {...x, role:"deactivated"} : x));
+    setToast({ msg:`${u.name} deactivated`, type:"warn" });
+  };
+
+  const reactivateUser = async (u) => {
+    const { error } = await supabase.from("profiles").update({ role:"regular" }).eq("id", u.id);
+    if (error) { setToast({ msg:"Failed: " + error.message, type:"error" }); return; }
+    setUsers(prev => prev.map(x => x.id===u.id ? {...x, role:"regular"} : x));
+    setToast({ msg:`${u.name} re-activated`, type:"success" });
+  };
+
+  const deleteUser = async (u) => {
+    if (!confirm(`Permanently delete ${u.name}? This cannot be undone.`)) return;
+    const { error } = await supabase.from("profiles").delete().eq("id", u.id);
+    if (error) { setToast({ msg:"Failed: " + error.message, type:"error" }); return; }
+    setUsers(prev => prev.filter(x => x.id !== u.id));
+    setToast({ msg:`${u.name} deleted`, type:"error" });
+  };
+
+  const updateRoleInline = async (u, newRole) => {
+    const { error } = await supabase.from("profiles").update({ role: newRole }).eq("id", u.id);
+    if (error) { setToast({ msg:"Failed: " + error.message, type:"error" }); return; }
+    setUsers(prev => prev.map(x => x.id===u.id ? {...x, role:newRole} : x));
+    setToast({ msg:`${u.name} → ${newRole}`, type:"success" });
+  };
+
+  const resetPassword = async (u) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(u.email, {
+      redirectTo: window.location.origin,
+    });
+    if (error) setToast({ msg:"Reset failed: " + error.message, type:"error" });
+    else setToast({ msg:`Password reset sent to ${u.email}`, type:"success" });
+  };
+
+  const ROLE_COLORS = {
+    superadmin: C.rose2, admin: C.violet2, regular: C.blue, deactivated: C.mist,
+  };
+
+  const filtered = users.filter(u => {
+    const matchSearch =
+      u.name?.toLowerCase().includes(search.toLowerCase()) ||
+      u.email?.toLowerCase().includes(search.toLowerCase());
+    const matchRole = filterRole === "all" || u.role === filterRole;
+    return matchSearch && matchRole;
+  });
+
+  const canResetPassword = role === "superadmin" || role === "admin";
+
+  return (
+    <div>
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
+
+      {/* Header */}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18, flexWrap:"wrap", gap:10 }}>
+        <div>
+          <h2 style={{ margin:"0 0 2px", fontWeight:800, fontSize:20, color:C.ink }}>User Management</h2>
+          <div style={{ fontSize:12, color:C.mist }}>{users.length} total accounts</div>
+        </div>
+        <Btn label="Invite User" icon={Ico.plus} onClick={openInvite} sm/>
+      </div>
+
+      {/* Search */}
+      <div style={{ marginBottom:12 }}>
+        <input value={search} onChange={e=>setSearch(e.target.value)}
+          placeholder="Search by name or email…"
+          style={{ width:"100%", padding:"10px 14px", borderRadius:R.full, border:`1.5px solid ${C.cloud}`, fontSize:13, outline:"none", color:C.ink, boxSizing:"border-box" }}/>
+      </div>
+
+      {/* Role filter pills */}
+      <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
+        {[
+          { key:"all",        label:`All (${users.length})` },
+          { key:"superadmin", label:`Dev (${users.filter(u=>u.role==="superadmin").length})`, color:C.rose2 },
+          { key:"admin",      label:`Admin (${users.filter(u=>u.role==="admin").length})`,     color:C.violet2 },
+          { key:"regular",    label:`Member (${users.filter(u=>u.role==="regular").length})`,  color:C.blue },
+          { key:"deactivated",label:`Disabled (${users.filter(u=>u.role==="deactivated").length})`, color:C.mist },
+        ].map(f=>(
+          <Pill key={f.key} label={f.label} active={filterRole===f.key}
+            onClick={()=>setFilterRole(f.key)} color={f.color||C.blue}/>
+        ))}
+      </div>
+
+      {/* ── MOBILE: Card list ── */}
+      {mob ? (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {loading ? (
+            <div style={{ textAlign:"center", padding:"28px 0", color:C.mist }}>Loading…</div>
+          ) : filtered.length === 0 ? (
+            <div style={{ textAlign:"center", padding:"28px 0", color:C.mist }}>No users found.</div>
+          ) : filtered.map(u => {
+            const linkedMember = members.find(m=>m.id===u.member_id);
+            return (
+              <Card key={u.id} style={{ opacity: u.role==="deactivated"?.5:1 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12 }}>
+                  <Av name={u.name||u.email} size={40}/>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontWeight:700, color:C.ink, fontSize:14 }}>{u.name||"—"}</div>
+                    <div style={{ fontSize:11, color:C.mist, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{u.email}</div>
+                  </div>
+                  <Badge label={u.role==="superadmin"?"Dev":u.role} color={ROLE_COLORS[u.role]||C.slate}/>
+                </div>
+
+                <div style={{ fontSize:12, color:C.slate, marginBottom:10 }}>
+                  <span>🏢 {u.branches?.name||"No branch"}</span>
+                  {linkedMember && <span style={{ marginLeft:12, color:C.green }}>✓ {linkedMember.name}</span>}
+                </div>
+
+                {/* Inline role select */}
+                <div style={{ marginBottom:10 }}>
+                  <label style={{ fontSize:11, color:C.mist, fontWeight:600, textTransform:"uppercase", letterSpacing:.3 }}>Role</label>
+                  <select value={u.role} onChange={e=>updateRoleInline(u, e.target.value)}
+                    style={{ display:"block", marginTop:4, padding:"7px 12px", borderRadius:R.md, border:`1.5px solid ${C.fog}`, fontSize:13, outline:"none", background:C.white, color:C.ink, width:"100%" }}>
+                    <option value="regular">Regular Member</option>
+                    <option value="admin">Admin</option>
+                    <option value="superadmin">Super Admin / Dev</option>
+                    <option value="deactivated">Deactivated</option>
+                  </select>
+                </div>
+
+                <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                  <button onClick={()=>openEdit(u)} style={{ border:"none", background:C.blue3, borderRadius:R.sm, padding:"6px 12px", cursor:"pointer", fontSize:12, color:C.blue, fontWeight:600 }}>Edit</button>
+                  {canResetPassword && <button onClick={()=>resetPassword(u)} style={{ border:"none", background:C.violet3, borderRadius:R.sm, padding:"6px 12px", cursor:"pointer", fontSize:12, color:C.violet, fontWeight:600 }}>Reset PW</button>}
+                  {u.role==="deactivated"
+                    ? <button onClick={()=>reactivateUser(u)} style={{ border:"none", background:C.green3, borderRadius:R.sm, padding:"6px 12px", cursor:"pointer", fontSize:12, color:C.green, fontWeight:600 }}>Activate</button>
+                    : <button onClick={()=>deactivateUser(u)} style={{ border:"none", background:C.amber3, borderRadius:R.sm, padding:"6px 12px", cursor:"pointer", fontSize:12, color:C.amber, fontWeight:600 }}>Disable</button>
+                  }
+                  <button onClick={()=>deleteUser(u)} style={{ border:"none", background:C.rose3, borderRadius:R.sm, padding:"6px 12px", cursor:"pointer", fontSize:12, color:C.rose2, fontWeight:600 }}>Delete</button>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      ) : (
+        /* ── DESKTOP: Table ── */
+        <Card style={{ padding:0, overflow:"hidden" }}>
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+              <thead>
+                <tr style={{ background:C.fog }}>
+                  {["User","Role","Branch","Linked Member","Actions"].map(h=>(
+                    <th key={h} style={{ textAlign:"left", padding:"10px 16px", color:C.slate, fontWeight:600, fontSize:11, textTransform:"uppercase", letterSpacing:.4, whiteSpace:"nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={5} style={{ padding:"28px 16px", textAlign:"center", color:C.mist }}>Loading…</td></tr>
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={5} style={{ padding:"28px 16px", textAlign:"center", color:C.mist }}>No users found.</td></tr>
+                ) : filtered.map(u => {
+                  const linkedMember = members.find(m=>m.id===u.member_id);
+                  return (
+                    <tr key={u.id} style={{ borderTop:`1px solid ${C.fog}`, opacity:u.role==="deactivated"?.5:1 }}>
+                      <td style={{ padding:"12px 16px" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                          <Av name={u.name||u.email} size={34}/>
+                          <div>
+                            <div style={{ fontWeight:600, color:C.ink }}>{u.name||"—"}</div>
+                            <div style={{ fontSize:11, color:C.mist }}>{u.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      {/* Inline role select */}
+                      <td style={{ padding:"12px 16px" }}>
+                        <select value={u.role} onChange={e=>updateRoleInline(u, e.target.value)}
+                          style={{ padding:"5px 10px", borderRadius:R.md, border:`1.5px solid ${ROLE_COLORS[u.role]||C.cloud}`, fontSize:12, outline:"none", background:`${ROLE_COLORS[u.role]||C.slate}12`, color:ROLE_COLORS[u.role]||C.slate, fontWeight:600, cursor:"pointer" }}>
+                          <option value="regular">Member</option>
+                          <option value="admin">Admin</option>
+                          <option value="superadmin">Dev / Super</option>
+                          <option value="deactivated">Deactivated</option>
+                        </select>
+                      </td>
+                      <td style={{ padding:"12px 16px", color:C.slate, fontSize:12 }}>{u.branches?.name||"—"}</td>
+                      <td style={{ padding:"12px 16px" }}>
+                        {linkedMember ? (
+                          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                            <Ico.check size={12} color={C.green}/>
+                            <span style={{ fontSize:12, color:C.green, fontWeight:600 }}>{linkedMember.name}</span>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize:12, color:C.mist }}>Not linked</span>
+                        )}
+                      </td>
+                      <td style={{ padding:"12px 16px" }}>
+                        <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                          <button onClick={()=>openEdit(u)} style={{ border:"none", background:C.blue3, borderRadius:R.sm, padding:"6px 10px", cursor:"pointer", fontSize:11, color:C.blue, fontWeight:600 }}>Edit</button>
+                          {canResetPassword && (
+                            <button onClick={()=>resetPassword(u)} style={{ border:"none", background:C.violet3, borderRadius:R.sm, padding:"6px 10px", cursor:"pointer", fontSize:11, color:C.violet, fontWeight:600 }}>Reset PW</button>
+                          )}
+                          {u.role==="deactivated"
+                            ? <button onClick={()=>reactivateUser(u)} style={{ border:"none", background:C.green3, borderRadius:R.sm, padding:"6px 10px", cursor:"pointer", fontSize:11, color:C.green, fontWeight:600 }}>Activate</button>
+                            : <button onClick={()=>deactivateUser(u)} style={{ border:"none", background:C.amber3, borderRadius:R.sm, padding:"6px 10px", cursor:"pointer", fontSize:11, color:C.amber, fontWeight:600 }}>Disable</button>
+                          }
+                          <button onClick={()=>deleteUser(u)} style={{ border:"none", background:C.rose3, borderRadius:R.sm, padding:"6px 10px", cursor:"pointer", fontSize:11, color:C.rose2, fontWeight:600 }}>Delete</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* Edit / Invite Modal */}
+      <Modal open={!!modal} onClose={()=>setModal(null)} title={modal==="invite"?"Invite New User":"Edit User"}>
+        <Inp label="Full Name" value={form.name} onChange={v=>setForm({...form,name:v})} placeholder="Juan dela Cruz" required/>
+        {modal==="invite" && (
+          <Inp label="Email Address" value={form.email} onChange={v=>setForm({...form,email:v})} placeholder="juan@example.com" required/>
+        )}
+        <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:14 }}>
+          <label style={{ fontSize:12, fontWeight:600, color:C.slate }}>Role</label>
+          <select value={form.role} onChange={e=>setForm({...form,role:e.target.value})}
+            style={{ padding:"10px 14px", border:`1.5px solid ${C.fog}`, borderRadius:R.md, fontSize:14, outline:"none", background:C.white, color:C.ink }}>
+            <option value="regular">Regular Member</option>
+            <option value="admin">Admin</option>
+            <option value="superadmin">Super Admin / Dev</option>
+          </select>
+        </div>
+        <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:14 }}>
+          <label style={{ fontSize:12, fontWeight:600, color:C.slate }}>Branch</label>
+          <select value={form.branch_id} onChange={e=>setForm({...form,branch_id:e.target.value})}
+            style={{ padding:"10px 14px", border:`1.5px solid ${C.fog}`, borderRadius:R.md, fontSize:14, outline:"none", background:C.white, color:C.ink }}>
+            <option value="">— No branch assigned —</option>
+            {branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+        </div>
+        <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:14 }}>
+          <label style={{ fontSize:12, fontWeight:600, color:C.slate }}>Link to Member Record</label>
+          <select value={form.member_id} onChange={e=>setForm({...form,member_id:e.target.value})}
+            style={{ padding:"10px 14px", border:`1.5px solid ${C.fog}`, borderRadius:R.md, fontSize:14, outline:"none", background:C.white, color:C.ink }}>
+            <option value="">— Not linked —</option>
+            {members.map(m=><option key={m.id} value={m.id}>{m.name} ({m.member_code})</option>)}
+          </select>
+        </div>
+        {form.member_id && (
+          <div style={{ background:C.green3, borderRadius:R.md, padding:"10px 14px", fontSize:12, color:C.green, marginBottom:14 }}>
+            ✓ Giving, attendance, and QR will be linked to this member record.
+          </div>
+        )}
+        <div style={{ display:"flex", gap:8 }}>
+          <Btn label={saving?"Saving…":modal==="invite"?"Send Invite":"Save Changes"} icon={Ico.send} onClick={saveUser} full/>
+          {modal==="edit" && canResetPassword && (
+            <Btn label="Reset PW" outline color={C.violet} onClick={()=>{ resetPassword(selected); setModal(null); }}/>
+          )}
+        </div>
+      </Modal>
+    </div>
+  );
+};
+
 /* ── SETTINGS ──────────────────────────── */
 const SettingsPage = ({ role }) => {
+  const [subPage, setSubPage] = useState(null);
+
+  if (subPage === "users") return (
+    <div>
+      <button onClick={()=>setSubPage(null)}
+        style={{ display:"flex", alignItems:"center", gap:6, border:"none", background:"transparent", cursor:"pointer", color:C.blue, fontWeight:600, fontSize:13, marginBottom:16, padding:0 }}>
+        ← Back to Settings
+      </button>
+      <UserManagementPage role={role}/>
+    </div>
+  );
+
   const items = [
-    { I:Ico.users,    label:"User Management",    desc:"Add, edit, deactivate CMS accounts",           color:C.blue },
-    { I:Ico.branch,   label:"Branch Management",  desc:"Configure branch details and leaders",         color:C.violet2 },
-    { I:Ico.finance,  label:"Finance Categories", desc:"Edit giving types and fund labels",             color:C.green },
-    { I:Ico.shield,   label:"Roles & Permissions",desc:"Control access by role level",                 color:C.amber },
-    ...(role==="superadmin"?[{ I:Ico.upload, label:"Bulk Data Upload", desc:"Upload CSV/Excel for members, finance, attendance", color:C.rose2 }]:[]),
+    { key:"users",  I:Ico.users,   label:"User Management",    desc:"Add, edit, deactivate CMS accounts",           color:C.blue },
+    { key:null,     I:Ico.branch,  label:"Branch Management",  desc:"Configure branch details and leaders",         color:C.violet2 },
+    { key:null,     I:Ico.finance, label:"Finance Categories", desc:"Edit giving types and fund labels",            color:C.green },
+    { key:null,     I:Ico.shield,  label:"Roles & Permissions",desc:"Control access by role level",                 color:C.amber },
+    ...(role==="superadmin"?[{ key:null, I:Ico.upload, label:"Bulk Data Upload", desc:"Upload CSV/Excel for members, finance, attendance", color:C.rose2 }]:[]),
   ];
+
   return (
     <div>
       <h2 style={{ margin:"0 0 18px", fontWeight:800, fontSize:20, color:C.ink }}>Settings</h2>
       <div style={{ display:"flex", flexDirection:"column", gap:10, maxWidth:520 }}>
         {items.map(s=>(
-          <Card key={s.label} onClick={()=>alert(`Opening: ${s.label}`)} hoverable style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 18px" }}>
+          <Card key={s.label} onClick={()=>s.key ? setSubPage(s.key) : alert(`Opening: ${s.label}`)} hoverable style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 18px" }}>
             <div style={{ width:40,height:40,borderRadius:R.md,background:`${s.color}12`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
               <s.I size={18} color={s.color}/>
             </div>
