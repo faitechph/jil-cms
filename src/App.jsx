@@ -1857,6 +1857,38 @@ const BranchesPage = () => {
   const mainBranches = branches.filter(b => !b.parent_id);
   const subOf = (parentId) => branches.filter(b => b.parent_id === parentId);
 
+  const [editModal, setEditModal] = useState(false);
+const [editTarget, setEditTarget] = useState(null);
+const [editForm, setEditForm] = useState({ name:"", address:"", parent_id:"" });
+
+const openEdit = (b) => {
+  setEditTarget(b);
+  setEditForm({ name:b.name, address:b.address||"", parent_id:b.parent_id||"" });
+  setEditModal(true);
+};
+
+const saveBranch = async () => {
+  setSaving(true);
+  const { error } = await supabase.from("branches").update({
+    name: editForm.name,
+    address: editForm.address,
+    parent_id: editForm.parent_id || null,
+  }).eq("id", editTarget.id);
+  if (error) alert("Failed: " + error.message);
+  else {
+    setBranches(prev => prev.map(b => b.id===editTarget.id ? {...b,...editForm} : b));
+    setEditModal(false);
+  }
+  setSaving(false);
+};
+
+const deleteBranch = async (b) => {
+  if (!confirm(`Delete "${b.name}"? Sub-branches will become root branches.`)) return;
+  const { error } = await supabase.from("branches").delete().eq("id", b.id);
+  if (error) alert("Failed: " + error.message);
+  else setBranches(prev => prev.filter(x => x.id !== b.id));
+};
+  
   const addBranch = async () => {
     if (!form.name.trim()) return;
     setSaving(true);
@@ -1893,7 +1925,11 @@ const BranchesPage = () => {
                   <div style={{ fontWeight:700, fontSize:15, color:C.ink }}>{b.name}</div>
                   {b.address && <div style={{ fontSize:12, color:C.mist }}>{b.address}</div>}
                 </div>
-                <Badge label={`${subs.length} sub-branch${subs.length!==1?"es":""}`} color={colors[i%colors.length]}/>
+                  <Badge label={`${subs.length} sub-branch${subs.length!==1?"es":""}`} color={colors[i%colors.length]}/>
+                <div style={{ display:"flex", gap:6 }}>
+                  <button onClick={()=>openEdit(b)} style={{ border:"none", background:C.blue3, borderRadius:R.sm, padding:"5px 10px", cursor:"pointer", fontSize:11, color:C.blue, fontWeight:600 }}>Edit</button>
+                  <button onClick={()=>deleteBranch(b)} style={{ border:"none", background:C.rose3, borderRadius:R.sm, padding:"5px 10px", cursor:"pointer", fontSize:11, color:C.rose2, fontWeight:600 }}>Delete</button>
+                </div>
               </div>
             </Card>
 
@@ -1914,7 +1950,11 @@ const BranchesPage = () => {
                       {s.address && <div style={{ fontSize:11, color:C.mist }}>{s.address}</div>}
                     </div>
                     <Badge label="Sub-branch" color={C.slate}/>
-                  </div>
+                    <div style={{ display:"flex", gap:6 }}>
+                      <button onClick={()=>openEdit(s)} style={{ border:"none", background:C.blue3, borderRadius:R.sm, padding:"5px 10px", cursor:"pointer", fontSize:11, color:C.blue, fontWeight:600 }}>Edit</button>
+                      <button onClick={()=>deleteBranch(s)} style={{ border:"none", background:C.rose3, borderRadius:R.sm, padding:"5px 10px", cursor:"pointer", fontSize:11, color:C.rose2, fontWeight:600 }}>Delete</button>
+                    </div>
+                    </div>
                 </Card>
               </div>
             ))}
@@ -1944,6 +1984,21 @@ const BranchesPage = () => {
       </Modal>
     </div>
   );
+
+<Modal open={editModal} onClose={()=>setEditModal(false)} title="Edit Branch">
+  <Inp label="Branch Name" value={editForm.name} onChange={v=>setEditForm({...editForm,name:v})} required/>
+  <Inp label="Address (optional)" value={editForm.address} onChange={v=>setEditForm({...editForm,address:v})}/>
+  <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:14 }}>
+    <label style={{ fontSize:12, fontWeight:600, color:C.slate }}>Parent Branch</label>
+    <select value={editForm.parent_id} onChange={e=>setEditForm({...editForm,parent_id:e.target.value})}
+      style={{ padding:"10px 14px", border:`1.5px solid ${C.fog}`, borderRadius:R.md, fontSize:14, outline:"none", background:C.white, color:C.ink }}>
+      <option value="">— Main Branch (no parent) —</option>
+      {mainBranches.filter(b=>b.id!==editTarget?.id).map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
+    </select>
+  </div>
+  <Btn label={saving?"Saving…":"Save Changes"} icon={Ico.check} onClick={saveBranch} full/>
+</Modal>
+
 };
 
 const UserManagementPage = ({ role }) => {
@@ -2289,9 +2344,21 @@ const SettingsPage = ({ role }) => {
     </div>
   );
 
+  if (subPage === "branches") return (
+    <div>
+      <button onClick={()=>setSubPage(null)}
+        style={{ display:"flex", alignItems:"center", gap:6, border:"none",
+          background:"transparent", cursor:"pointer", color:C.blue,
+          fontWeight:600, fontSize:13, marginBottom:16, padding:0 }}>
+        ← Back to Settings
+      </button>
+      <BranchesPage/>
+    </div>
+  );
+
   const items = [
     { key:"users", I:Ico.users,   label:"User Management",    desc:"Add, edit, deactivate CMS accounts",           color:C.blue },
-    { key:null,    I:Ico.branch,  label:"Branch Management",  desc:"Configure branch details and leaders",         color:C.violet2 },
+    { key:"branches",    I:Ico.branch,  label:"Branch Management",  desc:"Configure branch details and leaders",         color:C.violet2 },
     { key:null,    I:Ico.finance, label:"Finance Categories", desc:"Edit giving types and fund labels",            color:C.green },
     { key:null,    I:Ico.shield,  label:"Roles & Permissions",desc:"Control access by role level",                 color:C.amber },
     ...(role==="superadmin"?[{ key:null, I:Ico.upload, label:"Bulk Data Upload", desc:"Upload CSV/Excel for members, finance, attendance", color:C.rose2 }]:[]),
