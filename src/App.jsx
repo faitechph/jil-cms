@@ -807,29 +807,23 @@ const GamStrip = ({ user }) => {
 
 /* ── AUDIT LOGGER ──────────────────────────── */
 const logAction = async (action, details, entity, entityId) => {
-  // replace the existing logAction try/catch block
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      setToast({ msg: "DEBUG: no session", type: "error" });
-      return { status: "ok" };
-    }
+    if (!session) return null;
     const user = session.user;
     const { data: profile } = await supabase.from("profiles").select("name").eq("id", user.id).maybeSingle();
-    const { error: logErr } = await supabase.from("audit_logs").insert([{
+    const { error } = await supabase.from("audit_logs").insert([{
       user_id: user.id,
       user_name: profile?.name || user.email || "Unknown",
-      action: "attendance_recorded",
-      details: `${member.name || parsed.name} checked in`,
-      entity: "attendance",
-      entity_id: String(member.id),
+      action,
+      details: details || null,
+      entity: entity || null,
+      entity_id: entityId ? String(entityId) : null,
     }]);
-    if (logErr) setToast({ msg: "LOG ERR: " + logErr.message, type: "error" });
-    else setToast({ msg: "Log OK ✓", type: "success" });
+    return error || null;
   } catch (err) {
-    setToast({ msg: "LOG EX: " + err.message, type: "error" });
+    return err;
   }
-  return { status: "ok" };
 };
 /* ═══════════════════════════════════════════════════════════
    PAGES
@@ -1702,12 +1696,15 @@ const ScannerPage = ({ role }) => {
     .update({ points: (member.points || 0) + 10 })
     .eq("id", member.id);
 
-    try {
-  await logAction("attendance_recorded", `${member.name || parsed.name} checked in`, "attendance", member.id);
-} catch (err) {
-  setToast({ msg: "Log error: " + err.message, type: "error" });
-}
-return { status: "ok" };
+    const logErr = await logAction(
+    "attendance_recorded",
+    `${member.name || parsed.name} checked in`,
+    "attendance",
+    member.id
+  );
+  if (logErr) setToast({ msg: "LOG ERR: " + logErr.message, type: "error" });
+  else setToast({ msg: "Log OK ✓", type: "success" });
+  return { status: "ok" };
 };
 
   const handleScan = useCallback(async (raw) => {
