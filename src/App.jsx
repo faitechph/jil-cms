@@ -2451,6 +2451,138 @@ const FinanceCategoriesPage = () => {
   );
 };
 
+/* ── AUDIT LOG ──────────────────────────── */
+const AuditLogPage = () => {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("all");
+
+  useEffect(() => {
+    supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(100)
+      .then(({ data }) => { if (data) setLogs(data); setLoading(false); });
+  }, []);
+
+  const ACTION_FILTERS = ["all","login","member_created","member_updated","finance_submitted","attendance_recorded","category_added","category_deleted","branch_added","branch_deleted","user_updated"];
+
+  const actionColor = (a) => {
+    if (!a) return C.slate;
+    if (a.includes("delete")) return C.rose2;
+    if (a.includes("create") || a.includes("added")) return C.green;
+    if (a.includes("update") || a.includes("edit")) return C.blue;
+    if (a.includes("login")) return C.violet2;
+    if (a.includes("submit") || a.includes("record")) return C.amber;
+    return C.slate;
+  };
+
+  const filtered = filter === "all" ? logs : logs.filter(l => l.action === filter);
+
+  return (
+    <div>
+      <h2 style={{ margin:"0 0 16px", fontWeight:800, fontSize:20, color:C.ink }}>Audit Log</h2>
+      <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
+        {ACTION_FILTERS.map(a => (
+          <Pill key={a} label={a === "all" ? `All (${logs.length})` : a.replace(/_/g," ")}
+            active={filter===a} onClick={()=>setFilter(a)} color={actionColor(a)}/>
+        ))}
+      </div>
+      <Card style={{ padding:0, overflow:"hidden" }}>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+            <thead>
+              <tr style={{ background:C.fog }}>
+                {["User","Action","Details","Entity","When"].map(h=>(
+                  <th key={h} style={{ textAlign:"left", padding:"10px 16px", color:C.slate, fontWeight:600, fontSize:11, textTransform:"uppercase", letterSpacing:.4, whiteSpace:"nowrap" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={5} style={{ padding:"28px 16px", textAlign:"center", color:C.mist }}>Loading…</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={5} style={{ padding:"28px 16px", textAlign:"center", color:C.mist }}>No audit logs yet.</td></tr>
+              ) : filtered.map(l => (
+                <tr key={l.id} style={{ borderTop:`1px solid ${C.fog}` }}>
+                  <td style={{ padding:"11px 16px" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <Av name={l.user_name||"?"} size={28}/>
+                      <span style={{ fontWeight:500, color:C.ink, fontSize:12 }}>{l.user_name||"—"}</span>
+                    </div>
+                  </td>
+                  <td style={{ padding:"11px 16px" }}>
+                    <Badge label={(l.action||"—").replace(/_/g," ")} color={actionColor(l.action)}/>
+                  </td>
+                  <td style={{ padding:"11px 16px", color:C.slate, fontSize:12, maxWidth:220 }}>{l.details||"—"}</td>
+                  <td style={{ padding:"11px 16px", color:C.mist, fontSize:12 }}>{l.entity||"—"}</td>
+                  <td style={{ padding:"11px 16px", color:C.mist, fontSize:11, whiteSpace:"nowrap" }}>
+                    {new Date(l.created_at).toLocaleString("en-PH",{ month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+/* ── APP SETTINGS ──────────────────────────── */
+const AppSettingsPage = () => {
+  const [settings, setSettings] = useState({ church_name:"", address:"", contact_email:"", contact_phone:"", logo_url:"" });
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.from("app_settings").select("key, value")
+      .then(({ data }) => {
+        if (data) {
+          const map = {};
+          data.forEach(r => { map[r.key] = r.value || ""; });
+          setSettings(prev => ({ ...prev, ...map }));
+        }
+        setLoading(false);
+      });
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    const results = await Promise.all(
+      Object.entries(settings).map(([key, value]) =>
+        supabase.from("app_settings").upsert({ key, value }, { onConflict:"key" })
+      )
+    );
+    const failed = results.find(r => r.error);
+    if (failed) setToast({ msg:"Failed: " + failed.error.message, type:"error" });
+    else setToast({ msg:"Settings saved!", type:"success" });
+    setSaving(false);
+  };
+
+  if (loading) return <div style={{ color:C.mist, padding:"28px 0" }}>Loading settings…</div>;
+
+  return (
+    <div>
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
+      <h2 style={{ margin:"0 0 18px", fontWeight:800, fontSize:20, color:C.ink }}>App Settings</h2>
+      <Card style={{ maxWidth:560 }}>
+        <h3 style={{ margin:"0 0 16px", fontWeight:700, fontSize:14, color:C.ink }}>Church Information</h3>
+        <Inp label="Church Name" value={settings.church_name} onChange={v=>setSettings({...settings,church_name:v})} placeholder="e.g. JIL Pinamalayan"/>
+        <Inp label="Address" value={settings.address} onChange={v=>setSettings({...settings,address:v})} placeholder="e.g. Pinamalayan, Oriental Mindoro"/>
+        <Inp label="Contact Email" value={settings.contact_email} onChange={v=>setSettings({...settings,contact_email:v})} placeholder="e.g. jilpinamalayan@gmail.com"/>
+        <Inp label="Contact Phone" value={settings.contact_phone} onChange={v=>setSettings({...settings,contact_phone:v})} placeholder="e.g. 09XX-XXX-XXXX"/>
+        <Inp label="Logo URL" value={settings.logo_url} onChange={v=>setSettings({...settings,logo_url:v})} placeholder="https://..."/>
+        {settings.logo_url && (
+          <div style={{ marginTop:-8, marginBottom:14, display:"flex", alignItems:"center", gap:10 }}>
+            <img src={settings.logo_url} alt="Logo" style={{ width:48, height:48, objectFit:"cover", borderRadius:R.md, border:`1px solid ${C.fog}` }}/>
+            <span style={{ fontSize:12, color:C.mist }}>Logo preview</span>
+          </div>
+        )}
+        <Btn label={saving?"Saving…":"Save Changes"} icon={Ico.check} onClick={save} full/>
+      </Card>
+    </div>
+  );
+};
+
 /* ── SETTINGS ──────────────────────────── */
 const SettingsPage = ({ role }) => {
   const [subPage, setSubPage] = useState(null);
@@ -2491,11 +2623,36 @@ const SettingsPage = ({ role }) => {
   </div>
 );
 
+if (subPage === "audit-log") return (
+  <div>
+    <button onClick={() => setSubPage(null)}
+      style={{ display:"flex", alignItems:"center", gap:6, border:"none",
+        background:"transparent", cursor:"pointer", color:C.blue,
+        fontWeight:600, fontSize:13, marginBottom:16, padding:0 }}>
+      ← Back to Settings
+    </button>
+    <AuditLogPage/>
+  </div>
+);
+
+if (subPage === "app-settings") return (
+  <div>
+    <button onClick={() => setSubPage(null)}
+      style={{ display:"flex", alignItems:"center", gap:6, border:"none",
+        background:"transparent", cursor:"pointer", color:C.blue,
+        fontWeight:600, fontSize:13, marginBottom:16, padding:0 }}>
+      ← Back to Settings
+    </button>
+    <AppSettingsPage/>
+  </div>
+);
+
   const items = [
     { key:"users", I:Ico.users,   label:"User Management",    desc:"Add, edit, deactivate CMS accounts",           color:C.blue },
     { key:"branches",    I:Ico.branch,  label:"Branch Management",  desc:"Configure branch details and leaders",         color:C.violet2 },
     { key:"finance-categories", I:Ico.finance, label:"Finance Categories", desc:"Edit giving types and fund labels", color:C.green },
-    { key:null,    I:Ico.shield,  label:"Roles & Permissions",desc:"Control access by role level",                 color:C.amber },
+    { key:"audit-log",    I:Ico.report,   label:"Audit Log",    desc:"Track who did what and when",           color:C.violet2 },
+{ key:"app-settings", I:Ico.settings, label:"App Settings", desc:"Church name, address, contact info",    color:C.slate },
     ...(role==="superadmin"?[{ key:null, I:Ico.upload, label:"Bulk Data Upload", desc:"Upload CSV/Excel for members, finance, attendance", color:C.rose2 }]:[]),
   ];
 
