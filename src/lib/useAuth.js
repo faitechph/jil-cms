@@ -65,10 +65,30 @@ export function useAuth() {
   }
 
   await loadProfile(data.user);
+  await supabase.from("audit_logs").insert([{
+    user_id: data.user.id,
+    user_name: profile.name,
+    action: "login",
+    details: "Signed in",
+    entity: "user",
+    entity_id: data.user.id,
+  }]);
   return { ok: true };
 };
 
   const logout = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: profile } = await supabase.from("profiles").select("name").eq("id", user.id).maybeSingle();
+      await supabase.from("audit_logs").insert([{
+        user_id: user.id,
+        user_name: profile?.name || user.email || "Unknown",
+        action: "logout",
+        details: "Signed out",
+        entity: "user",
+        entity_id: user.id,
+      }]);
+    }
     await supabase.auth.signOut();
     setAuth(null);
   };
