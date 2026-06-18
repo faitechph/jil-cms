@@ -848,13 +848,10 @@ const Dashboard = ({ role, user }) => {
   const [themeUrl, setThemeUrl] = useState(null);
 
   useEffect(() => {
-  supabase.from("announcements").select("*").order("created_at", { ascending: false })
-    .then(({ data }) => { if (data) setAnnouncements(data); });
-  supabase.from("events").select("*").order("date", { ascending: true })
-    .then(({ data }) => { if (data) setEvents(data); });
-  // ↓ THIS LINE IS MISSING
-  supabase.from("monthly_theme").select("image_url").eq("id", 1).single()
-    .then(({ data }) => { if (data?.image_url) setThemeUrl(data.image_url); });
+    supabase.from("announcements").select("*").order("created_at", { ascending: false })
+      .then(({ data }) => { if (data) setAnnouncements(data); });
+    supabase.from("events").select("*").order("date", { ascending: true })
+      .then(({ data }) => { if (data) setEvents(data); });
   }, []);
 
   return (
@@ -940,9 +937,6 @@ const AnnouncementsPage = () => {
   const [eForm, setEForm] = useState({ name:"", type:"event", date:"", branch:"" });
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null); 
-  const [themeFile, setThemeFile] = useState(null);
-  const [themeUploading, setThemeUploading] = useState(false);
-  const [themeUrl, setThemeUrl] = useState(null);
   const mob = useIsMobile();
 
   const TAG_OPTIONS = ["Worship","Events","Ministry","Announcement","Other"];
@@ -990,25 +984,6 @@ const AnnouncementsPage = () => {
     logAction("event_added", `"${eForm.name}"`, "event", data.id);
   }
   setSaving(false);
-  };
-
-  const uploadTheme = async () => {
-  if (!themeFile) return;
-  setThemeUploading(true);
-  const name = themeFile.name.toLowerCase();
-  const ext = name.endsWith(".png") ? "png" : "jpg";
-  const path = `theme-${Date.now()}.${ext}`;
-  const { error: upErr } = await supabase.storage.from("theme").upload(path, themeFile, { upsert: true });
-  if (upErr) {
-    setToast({ msg: "Upload failed: " + upErr.message, type: "error" });
-  } else {
-    const { data: { publicUrl } } = supabase.storage.from("theme").getPublicUrl(path);
-    await supabase.from("monthly_theme").update({ image_url: publicUrl, updated_at: new Date().toISOString() }).eq("id", 1);
-    setToast({ msg: "Monthly theme updated!", type: "success" });
-    setThemeUrl(publicUrl);
-    setThemeFile(null);
-  }
-  setThemeUploading(false);
   };
 
   const deleteEvent = async (id) => {
@@ -1110,22 +1085,6 @@ const AnnouncementsPage = () => {
         </div>
       )}
 
-    <Card style={{ marginTop:24, padding:20 }}>
-      <h3 style={{ margin:"0 0 12px", fontWeight:700, fontSize:16, color:C.ink }}>Monthly Theme Image</h3>
-      <input type="file" accept="image/jpeg,image/png" onChange={e => setThemeFile(e.target.files[0])}/>
-      {themeFile && (
-        <div style={{ marginTop:12}}>
-          <Btn label={themeUploading ? "Uploading..." : "Upload"} onClick={uploadTheme}/>
-        </div>
-       ) }
-      {themeUrl && (
-        <div style={{ marginTop:12, display:"flex", alignItems:"center", gap:8 }}>
-          <input readOnly value={themeUrl}
-            style={{ flex:1, padding:"8px 12px", borderRadius:R.md, border:`1.5px solid ${C.fog}`, fontSize:12, color:C.slate, background:C.fog }}/>
-          <Btn sm label="Copy Link" onClick={() => { navigator.clipboard.writeText(themeUrl); setToast({ msg:"Link copied!", type:"success" }); }}/>
-        </div>
-      )}
-    </Card>
     </div>
   );
 };
@@ -2575,6 +2534,62 @@ const AuditLogPage = () => {
   );
 };
 
+/* ── MONTHLY THEME ──────────────────────────── */
+const MonthlyThemePage = () => {
+  const [themeFile, setThemeFile] = useState(null);
+  const [themeUploading, setThemeUploading] = useState(false);
+  const [themeUrl, setThemeUrl] = useState(null);
+  const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    supabase.from("monthly_theme").select("image_url").eq("id", 1).single()
+      .then(({ data }) => { if (data?.image_url) setThemeUrl(data.image_url); });
+  }, []);
+
+  const uploadTheme = async () => {
+    if (!themeFile) return;
+    setThemeUploading(true);
+    const ext = themeFile.name.endsWith(".png") ? "png" : "jpg";
+    const path = `theme-${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from("theme").upload(path, themeFile, { upsert: true });
+    if (upErr) {
+      setToast({ msg:"Upload failed: " + upErr.message, type:"error" });
+    } else {
+      const { data: { publicUrl } } = supabase.storage.from("theme").getPublicUrl(path);
+      await supabase.from("monthly_theme").update({ image_url: publicUrl, updated_at: new Date().toISOString() }).eq("id", 1);
+      setThemeUrl(publicUrl);
+      setThemeFile(null);
+      setToast({ msg:"Monthly theme updated!", type:"success" });
+    }
+    setThemeUploading(false);
+  };
+
+  return (
+    <div>
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)}/>}
+      <h2 style={{ margin:"0 0 18px", fontWeight:800, fontSize:20, color:C.ink }}>Monthly Theme</h2>
+      <Card style={{ maxWidth:560 }}>
+        <h3 style={{ margin:"0 0 12px", fontWeight:700, fontSize:14, color:C.ink }}>Theme Image</h3>
+        <p style={{ fontSize:12, color:C.mist, marginTop:0, marginBottom:16 }}>
+          This image appears on the Dashboard and as the Login page background.
+        </p>
+        {themeUrl && (
+          <div style={{ marginBottom:16, borderRadius:R.lg, overflow:"hidden" }}>
+            <img src={themeUrl} alt="Current Theme" style={{ width:"100%", display:"block", maxHeight:220, objectFit:"cover" }}/>
+          </div>
+        )}
+        <input type="file" accept="image/jpeg,image/png" onChange={e => setThemeFile(e.target.files[0])}/>
+        {themeFile && (
+          <div style={{ marginTop:12 }}>
+            <Btn label={themeUploading ? "Uploading…" : "Upload Theme"} onClick={uploadTheme}/>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+};
+
+
 /* ── APP SETTINGS ──────────────────────────── */
 const AppSettingsPage = () => {
 const [settings, setSettings] = useState({ church_name:"", address:"", contact_email:"", contact_phone:"", logo_url:"" });
@@ -2710,6 +2725,30 @@ if (subPage === "audit-log") return (
   </div>
 );
 
+if (subPage === "monthly-theme") return (
+    <div>
+      <button onClick={() => setSubPage(null)}
+        style={{ display:"flex", alignItems:"center", gap:6, border:"none",
+          background:"transparent", cursor:"pointer", color:C.blue,
+          fontWeight:600, fontSize:13, marginBottom:16, padding:0 }}>
+        ← Back to Settings
+      </button>
+      <MonthlyThemePage/>
+    </div>
+  );
+
+  if (subPage === "app-settings") return (
+    <div>
+      <button onClick={() => setSubPage(null)}
+        style={{ display:"flex", alignItems:"center", gap:6, border:"none",
+          background:"transparent", cursor:"pointer", color:C.blue,
+          fontWeight:600, fontSize:13, marginBottom:16, padding:0 }}>
+        ← Back to Settings
+      </button>
+      <AppSettingsPage/>
+    </div>
+  );
+
 if (subPage === "app-settings") return (
   <div>
     <button onClick={() => setSubPage(null)}
@@ -2726,8 +2765,9 @@ if (subPage === "app-settings") return (
     { key:"users", I:Ico.users,   label:"User Management",    desc:"Add, edit, deactivate CMS accounts",           color:C.blue },
     { key:"branches",    I:Ico.branch,  label:"Branch Management",  desc:"Configure branch details and leaders",         color:C.violet2 },
     { key:"finance-categories", I:Ico.finance, label:"Finance Categories", desc:"Edit giving types and fund labels", color:C.green },
-    { key:"audit-log",    I:Ico.report,   label:"Audit Log",    desc:"Track who did what and when",           color:C.violet2 },
-{ key:"app-settings", I:Ico.settings, label:"App Settings", desc:"Church name, address, contact info",    color:C.slate },
+    { key:"audit-log",      I:Ico.report,    label:"Audit Log",      desc:"Track who did what and when",              color:C.violet2 },
+    { key:"monthly-theme",  I:Ico.calendar,  label:"Monthly Theme",  desc:"Upload the banner shown on dashboard and login", color:C.green },
+    { key:"app-settings",   I:Ico.settings,  label:"App Settings",   desc:"Church name, address, contact info",       color:C.slate },
     ...(role==="superadmin"?[{ key:null, I:Ico.upload, label:"Bulk Data Upload", desc:"Upload CSV/Excel for members, finance, attendance", color:C.rose2 }]:[]),
   ];
 
