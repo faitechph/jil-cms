@@ -2336,6 +2336,121 @@ const UserManagementPage = ({ role }) => {
   );
 };
 
+/* ── FINANCE CATEGORIES ──────────────────────────── */
+const FinanceCategoriesPage = () => {
+  const [categories, setCategories] = useState([]);
+  const [modal, setModal] = useState(false);
+  const [editModal, setEditModal] = useState(false);
+  const [editTarget, setEditTarget] = useState(null);
+  const [form, setForm] = useState({ name:"", description:"" });
+  const [editForm, setEditForm] = useState({ name:"", description:"" });
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    supabase.from("finance_categories").select("*").order("name")
+      .then(({ data }) => { if (data) setCategories(data); });
+  }, []);
+
+  const addCategory = async () => {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    const { data, error } = await supabase
+      .from("finance_categories")
+      .insert([{ name: form.name, description: form.description }])
+      .select().single();
+    if (error) setToast({ msg:"Failed: " + error.message, type:"error" });
+    else {
+      setCategories(prev => [...prev, data]);
+      setForm({ name:"", description:"" });
+      setModal(false);
+      setToast({ msg:`"${data.name}" added!`, type:"success" });
+    }
+    setSaving(false);
+  };
+
+  const openEdit = (c) => {
+    setEditTarget(c);
+    setEditForm({ name:c.name, description:c.description||"" });
+    setEditModal(true);
+  };
+
+  const saveCategory = async () => {
+    setSaving(true);
+    const { error } = await supabase.from("finance_categories").update({
+      name: editForm.name,
+      description: editForm.description,
+    }).eq("id", editTarget.id);
+    if (error) setToast({ msg:"Failed: " + error.message, type:"error" });
+    else {
+      setCategories(prev => prev.map(c => c.id === editTarget.id ? { ...c, ...editForm } : c));
+      setEditModal(false);
+      setToast({ msg:`"${editForm.name}" updated!`, type:"success" });
+    }
+    setSaving(false);
+  };
+
+  const deleteCategory = async (c) => {
+    if (!confirm(`Delete "${c.name}"?`)) return;
+    const { error } = await supabase.from("finance_categories").delete().eq("id", c.id);
+    if (error) setToast({ msg:"Failed: " + error.message, type:"error" });
+    else {
+      setCategories(prev => prev.filter(x => x.id !== c.id));
+      setToast({ msg:`"${c.name}" deleted`, type:"warn" });
+    }
+  };
+
+  const colors = [C.blue, C.violet2, C.green, C.amber, C.rose2, "#0891B2", "#D97706"];
+
+  return (
+    <div>
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)}/>}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
+        <h2 style={{ margin:0, fontWeight:800, fontSize:20, color:C.ink }}>Finance Categories</h2>
+        <Btn label="Add Category" icon={Ico.plus} onClick={() => setModal(true)} sm/>
+      </div>
+
+      <div style={{ display:"flex", flexDirection:"column", gap:10, maxWidth:560 }}>
+        {categories.length === 0
+          ? <p style={{ color:C.mist, fontSize:13 }}>No categories yet. Add one to get started.</p>
+          : categories.map((c, i) => {
+              const color = colors[i % colors.length];
+              return (
+                <Card key={c.id} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 18px", borderLeft:`4px solid ${color}` }}>
+                  <div style={{ width:38, height:38, borderRadius:R.md, background:`${color}12`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                    <Ico.finance size={17} color={color}/>
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontWeight:700, fontSize:14, color:C.ink }}>{c.name}</div>
+                    {c.description && <div style={{ fontSize:12, color:C.mist }}>{c.description}</div>}
+                  </div>
+                  <div style={{ display:"flex", gap:6 }}>
+                    <button onClick={() => openEdit(c)} style={{ border:"none", background:C.blue3, borderRadius:R.sm, padding:"5px 10px", cursor:"pointer", fontSize:11, color:C.blue, fontWeight:600 }}>Edit</button>
+                    <button onClick={() => deleteCategory(c)} style={{ border:"none", background:C.rose3, borderRadius:R.sm, padding:"5px 10px", cursor:"pointer", fontSize:11, color:C.rose2, fontWeight:600 }}>Delete</button>
+                  </div>
+                </Card>
+              );
+            })
+        }
+      </div>
+
+      {/* Add Modal */}
+      <Modal open={modal} onClose={() => setModal(false)} title="Add Finance Category">
+        <Inp label="Category Name" value={form.name} onChange={v => setForm({...form,name:v})} placeholder="e.g. Tithes" required/>
+        <Inp label="Description (optional)" value={form.description} onChange={v => setForm({...form,description:v})} placeholder="e.g. Regular tithe giving"/>
+        <Btn label={saving?"Saving…":"Add Category"} icon={Ico.plus} onClick={addCategory} full/>
+      </Modal>
+
+      {/* Edit Modal */}
+      <Modal open={editModal} onClose={() => setEditModal(false)} title="Edit Category">
+        <Inp label="Category Name" value={editForm.name} onChange={v => setEditForm({...editForm,name:v})} required/>
+        <Inp label="Description (optional)" value={editForm.description} onChange={v => setEditForm({...editForm,description:v})}/>
+        <Btn label={saving?"Saving…":"Save Changes"} icon={Ico.check} onClick={saveCategory} full/>
+      </Modal>
+    </div>
+  );
+};
+
 /* ── SETTINGS ──────────────────────────── */
 const SettingsPage = ({ role }) => {
   const [subPage, setSubPage] = useState(null);
@@ -2367,7 +2482,7 @@ const SettingsPage = ({ role }) => {
   const items = [
     { key:"users", I:Ico.users,   label:"User Management",    desc:"Add, edit, deactivate CMS accounts",           color:C.blue },
     { key:"branches",    I:Ico.branch,  label:"Branch Management",  desc:"Configure branch details and leaders",         color:C.violet2 },
-    { key:null,    I:Ico.finance, label:"Finance Categories", desc:"Edit giving types and fund labels",            color:C.green },
+    { key:"finance-categories", I:Ico.finance, label:"Finance Categories", desc:"Edit giving types and fund labels", color:C.green },
     { key:null,    I:Ico.shield,  label:"Roles & Permissions",desc:"Control access by role level",                 color:C.amber },
     ...(role==="superadmin"?[{ key:null, I:Ico.upload, label:"Bulk Data Upload", desc:"Upload CSV/Excel for members, finance, attendance", color:C.rose2 }]:[]),
   ];
