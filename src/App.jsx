@@ -807,25 +807,29 @@ const GamStrip = ({ user }) => {
 
 /* ── AUDIT LOGGER ──────────────────────────── */
 const logAction = async (action, details, entity, entityId) => {
+  // replace the existing logAction try/catch block
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
-      alert("logAction: no session");
-      return;
+      setToast({ msg: "DEBUG: no session", type: "error" });
+      return { status: "ok" };
     }
     const user = session.user;
     const { data: profile } = await supabase.from("profiles").select("name").eq("id", user.id).maybeSingle();
-    const { error } = await supabase.from("audit_logs").insert([{
+    const { error: logErr } = await supabase.from("audit_logs").insert([{
       user_id: user.id,
       user_name: profile?.name || user.email || "Unknown",
-      action,
-      details: details || null,
-      entity: entity || null,
-      entity_id: entityId ? String(entityId) : null,
+      action: "attendance_recorded",
+      details: `${member.name || parsed.name} checked in`,
+      entity: "attendance",
+      entity_id: String(member.id),
     }]);
-    if (error) alert("logAction insert error: " + error.message);
-    else alert("logAction success: " + action);
-  } catch (err) { alert("logAction exception: " + err.message); }
+    if (logErr) setToast({ msg: "LOG ERR: " + logErr.message, type: "error" });
+    else setToast({ msg: "Log OK ✓", type: "success" });
+  } catch (err) {
+    setToast({ msg: "LOG EX: " + err.message, type: "error" });
+  }
+  return { status: "ok" };
 };
 /* ═══════════════════════════════════════════════════════════
    PAGES
