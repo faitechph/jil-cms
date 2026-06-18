@@ -819,7 +819,7 @@ const logAction = async (action, details, entity, entityId) => {
       entity: entity || null,
       entity_id: entityId ? String(entityId) : null,
     }]);
-  } catch { /* fail silently */ }
+  } catch (err) { console.error("logAction failed:", err); }
 };
 
 /* ═══════════════════════════════════════════════════════════
@@ -1294,7 +1294,6 @@ const FinancePage = ({ role, user }) => {
                       note: form.note,
                       date: new Date().toISOString().split("T")[0],
                       member_id: user.memberId,
-                      branch_id: user.branchId,
                     }])
                     .select("*, members(name, branch)")
                     .single();
@@ -1694,8 +1693,12 @@ const ScannerPage = ({ role }) => {
     .update({ points: (member.points || 0) + 10 })
     .eq("id", member.id);
 
-    await logAction("attendance_recorded", `${member.name || parsed.name} checked in`, "attendance", member.id);
-  return { status: "ok" };
+    try {
+  await logAction("attendance_recorded", `${member.name || parsed.name} checked in`, "attendance", member.id);
+} catch (err) {
+  setToast({ msg: "Log error: " + err.message, type: "error" });
+}
+return { status: "ok" };
 };
 
   const handleScan = useCallback(async (raw) => {
