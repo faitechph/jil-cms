@@ -2479,6 +2479,18 @@ const SettingsPage = ({ role }) => {
     </div>
   );
 
+  if (subPage === "finance-categories") return (
+  <div>
+    <button onClick={() => setSubPage(null)}
+      style={{ display:"flex", alignItems:"center", gap:6, border:"none",
+        background:"transparent", cursor:"pointer", color:C.blue,
+        fontWeight:600, fontSize:13, marginBottom:16, padding:0 }}>
+      ← Back to Settings
+    </button>
+    <FinanceCategoriesPage/>
+  </div>
+);
+
   const items = [
     { key:"users", I:Ico.users,   label:"User Management",    desc:"Add, edit, deactivate CMS accounts",           color:C.blue },
     { key:"branches",    I:Ico.branch,  label:"Branch Management",  desc:"Configure branch details and leaders",         color:C.violet2 },
