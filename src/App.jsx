@@ -1702,6 +1702,7 @@ const ScannerPage = ({ role }) => {
     "attendance",
     member.id
   );
+  return { status: "ok", logErr };
   if (logErr) setToast({ msg: "LOG ERR: " + logErr.message, type: "error" });
   else setToast({ msg: "Log OK ✓", type: "success" });
   return { status: "ok" };
@@ -1724,7 +1725,10 @@ const ScannerPage = ({ role }) => {
       if (prev.length && prev[0].raw === raw && Date.now() - prev[0].ts < 3000) return prev;
       return [{ ...parsed, ts: Date.now(), status }, ...prev].slice(0, 20);
     });
-    if (status === "ok")        setToast({ msg:`${parsed.name || "Member"} checked in ✓`, type:"success" });
+    if (status === "ok") {
+  const logMsg = result.logErr ? ` | LOG ERR: ${result.logErr.message}` : " | Log OK ✓";
+  setToast({ msg:`${parsed.name || "Member"} checked in ✓${logMsg}`, type: result.logErr ? "error" : "success" });
+}
     if (status === "already")   setToast({ msg:`${parsed.name || "Member"} already checked in`, type:"warn" });
     if (status === "not_found") setToast({ msg:"Member not found", type:"error" });
     if (status === "error")     setToast({ msg:"Check-in failed", type:"error" });
