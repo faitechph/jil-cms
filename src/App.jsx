@@ -852,6 +852,8 @@ const Dashboard = ({ role, user }) => {
       .then(({ data }) => { if (data) setAnnouncements(data); });
     supabase.from("events").select("*").order("date", { ascending: true })
       .then(({ data }) => { if (data) setEvents(data); });
+    supabase.from("monthly_theme").select("image_url").eq("id", 1).single()
+      .then(({ data }) => { if (data?.image_url) setThemeUrl(data.image_url); });
   }, []);
 
   return (
