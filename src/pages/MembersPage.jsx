@@ -27,6 +27,22 @@ const loadScript = (src) => new Promise((resolve, reject) => {
   document.head.appendChild(s);
 });
 
+const logAction = async (action, details, entity, entityId) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data: profile } = await supabase.from("profiles").select("name").eq("id", user.id).maybeSingle();
+    await supabase.from("audit_logs").insert([{
+      user_id: user.id,
+      user_name: profile?.name || user.email || "Unknown",
+      action,
+      details: details || null,
+      entity: entity || null,
+      entity_id: entityId ? String(entityId) : null,
+    }]);
+  } catch { /* fail silently */ }
+};
+
 const useIsMobile = () => {
   const [mob, setMob] = useState(window.innerWidth < 768);
   useEffect(() => {
@@ -299,36 +315,44 @@ export default function MembersPage({ role }) {
   };
 
   const save = async () => {
-    if (!form.name.trim()) { notify("Name is required", "warn"); return; }
-    setSaving(true);
-    const payload = {
-      name:             form.name.trim(),
-      birthdate:        form.birthdate || null,
-      address:          form.address.trim(),
-      category:         form.category,
-      type:             form.type,
-      branch:           form.branch,
-      lifegroup_leader: form.lifegroup_leader.trim(),
-    };
-
-    if (editId) {
-      const { error } = await supabase.from("members").update(payload).eq("id", editId);
-      if (error) notify("Save failed: " + error.message, "error");
-      else notify("Member updated ✓");
-    } else {
-      const { error } = await supabase.from("members")
-        .insert({ ...payload, member_code: genCode(), is_active: true });
-      if (error) notify("Add failed: " + error.message, "error");
-      else notify("Member added ✓");
-    }
-
-    setSaving(false);
-    setShowModal(false);
-    setEditId(null);
-    setForm({ name:"", birthdate:"", address:"", category:"Official Member",
-              type:"Young Adult", branch:"", lifegroup_leader:"" });
-    fetchMembers();
+  if (!form.name.trim()) { notify("Name is required", "warn"); return; }
+  setSaving(true);
+  const payload = {
+    name:             form.name.trim(),
+    birthdate:        form.birthdate || null,
+    address:          form.address.trim(),
+    category:         form.category,
+    type:             form.type,
+    branch:           form.branch,
+    lifegroup_leader: form.lifegroup_leader.trim(),
   };
+
+  if (editId) {
+    const { error } = await supabase.from("members").update(payload).eq("id", editId);
+    if (error) notify("Save failed: " + error.message, "error");
+    else {
+      notify("Member updated ✓");
+      await logAction("member_updated", `Updated member: ${payload.name}`, "member", editId);
+    }
+  } else {
+    const { data, error } = await supabase.from("members")
+      .insert({ ...payload, member_code: genCode(), is_active: true })
+      .select()
+      .single();
+    if (error) notify("Add failed: " + error.message, "error");
+    else {
+      notify("Member added ✓");
+      await logAction("member_created", `Created member: ${payload.name}`, "member", data?.id);
+    }
+  }
+
+  setSaving(false);
+  setShowModal(false);
+  setEditId(null);
+  setForm({ name:"", birthdate:"", address:"", category:"Official Member",
+            type:"Young Adult", branch:"", lifegroup_leader:"" });
+  fetchMembers();
+};
 
   const deleteMember = async (id, name) => {
     if (!window.confirm(`Delete ${name}? This cannot be undone.`)) return;
