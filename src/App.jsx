@@ -931,7 +931,7 @@ const Dashboard = ({ role, user }) => {
 };
 
 /* ── ANNOUNCEMENTS MANAGER ──────────────────────────── */
-const AnnouncementsPage = () => {
+const AnnouncementsPage = ({ bg }) => {
   const [tab, setTab] = useState("announcements");
   const [announcements, setAnnouncements] = useState([]);
   const [events, setEvents] = useState([]);
@@ -994,7 +994,11 @@ const AnnouncementsPage = () => {
   };
 
   return (
-    <div>
+    <div style={ bg ? {
+    backgroundImage: `linear-gradient(rgba(232,237,245,.93), rgba(232,237,245,.93)), url(${bg})`,
+    backgroundSize:"cover", backgroundPosition:"center",
+    backgroundAttachment:"fixed", minHeight:"100%", margin:-28, padding:28,
+      } : {}}>
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)}/>}
       <h2 style={{ margin:"0 0 16px", fontWeight:800, fontSize:20, color:C.ink }}>Announcements & Events</h2>
       <div style={{ display:"flex", gap:8, marginBottom:18 }}>
@@ -2538,55 +2542,137 @@ const AuditLogPage = () => {
 
 /* ── MONTHLY THEME ──────────────────────────── */
 const MonthlyThemePage = () => {
+  const [toast, setToast] = useState(null);
+
+  // theme banner
   const [themeFile, setThemeFile] = useState(null);
   const [themeUploading, setThemeUploading] = useState(false);
   const [themeUrl, setThemeUrl] = useState(null);
-  const [toast, setToast] = useState(null);
+
+  // app-wide background
+  const [bgFile, setBgFile] = useState(null);
+  const [bgUploading, setBgUploading] = useState(false);
+  const [bgUrl, setBgUrl] = useState(null);
+
+  // finance background
+  const [finFile, setFinFile] = useState(null);
+  const [finUploading, setFinUploading] = useState(false);
+  const [finUrl, setFinUrl] = useState(null);
+
+  // announcements background
+  const [annFile, setAnnFile] = useState(null);
+  const [annUploading, setAnnUploading] = useState(false);
+  const [annUrl, setAnnUrl] = useState(null);
 
   useEffect(() => {
-    supabase.from("monthly_theme").select("image_url").eq("id", 1).single()
-      .then(({ data }) => { if (data?.image_url) setThemeUrl(data.image_url); });
+    supabase.from("app_settings").select("key, value")
+      .in("key", ["bg_url", "finance_bg_url", "announcement_bg_url"])
+      .then(({ data }) => {
+        if (data) data.forEach(r => {
+          if (r.key === "bg_url")              setBgUrl(r.value);
+          if (r.key === "finance_bg_url")      setFinUrl(r.value);
+          if (r.key === "announcement_bg_url") setAnnUrl(r.value);
+        });
+      });
   }, []);
 
-  const uploadTheme = async () => {
-    if (!themeFile) return;
-    setThemeUploading(true);
-    const ext = themeFile.name.endsWith(".png") ? "png" : "jpg";
-    const path = `theme-${Date.now()}.${ext}`;
-    const { error: upErr } = await supabase.storage.from("theme").upload(path, themeFile, { upsert: true });
-    if (upErr) {
-      setToast({ msg:"Upload failed: " + upErr.message, type:"error" });
-    } else {
-      const { data: { publicUrl } } = supabase.storage.from("theme").getPublicUrl(path);
-      await supabase.from("monthly_theme").update({ image_url: publicUrl, updated_at: new Date().toISOString() }).eq("id", 1);
-      setThemeUrl(publicUrl);
-      setThemeFile(null);
-      setToast({ msg:"Monthly theme updated!", type:"success" });
-    }
-    setThemeUploading(false);
+  const uploadImage = async (file, folder, onSuccess) => {
+    const ext = file.name.split(".").pop().toLowerCase();
+    const path = `${folder}-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("theme").upload(path, file, { upsert: true });
+    if (error) { setToast({ msg:"Upload failed: " + error.message, type:"error" }); return null; }
+    const { data: { publicUrl } } = supabase.storage.from("theme").getPublicUrl(path);
+    onSuccess(publicUrl);
+    return publicUrl;
   };
+
+  const UploadCard = ({ title, desc, currentUrl, file, setFile, uploading, setUploading, onUpload }) => (
+    <Card style={{ maxWidth:560, marginBottom:16 }}>
+      <h3 style={{ margin:"0 0 6px", fontWeight:700, fontSize:14, color:C.ink }}>{title}</h3>
+      <p style={{ fontSize:12, color:C.mist, marginTop:0, marginBottom:14 }}>{desc}</p>
+      {currentUrl && (
+        <div style={{ marginBottom:14, borderRadius:R.lg, overflow:"hidden" }}>
+          <img src={currentUrl} alt="Current" style={{ width:"100%", display:"block", maxHeight:200, objectFit:"cover" }}/>
+        </div>
+      )}
+      <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => setFile(e.target.files[0])}/>
+      {file && (
+        <div style={{ marginTop:12 }}>
+          <Btn label={uploading ? "Uploading…" : "Upload"} onClick={async () => {
+            setUploading(true);
+            await onUpload(file);
+            setFile(null);
+            setUploading(false);
+          }}/>
+        </div>
+      )}
+    </Card>
+  );
 
   return (
     <div>
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)}/>}
-      <h2 style={{ margin:"0 0 18px", fontWeight:800, fontSize:20, color:C.ink }}>Monthly Theme</h2>
-      <Card style={{ maxWidth:560 }}>
-        <h3 style={{ margin:"0 0 12px", fontWeight:700, fontSize:14, color:C.ink }}>Theme Image</h3>
-        <p style={{ fontSize:12, color:C.mist, marginTop:0, marginBottom:16 }}>
-          This image appears on the Dashboard and as the Login page background.
-        </p>
-        {themeUrl && (
-          <div style={{ marginBottom:16, borderRadius:R.lg, overflow:"hidden" }}>
-            <img src={themeUrl} alt="Current Theme" style={{ width:"100%", display:"block", maxHeight:220, objectFit:"cover" }}/>
-          </div>
-        )}
-        <input type="file" accept="image/jpeg,image/png" onChange={e => setThemeFile(e.target.files[0])}/>
-        {themeFile && (
-          <div style={{ marginTop:12 }}>
-            <Btn label={themeUploading ? "Uploading…" : "Upload Theme"} onClick={uploadTheme}/>
-          </div>
-        )}
-      </Card>
+      <h2 style={{ margin:"0 0 18px", fontWeight:800, fontSize:20, color:C.ink }}>Monthly Theme & Backgrounds</h2>
+
+      <UploadCard
+        title="Monthly Theme Banner"
+        desc="Shown on the Dashboard and as Login page background."
+        currentUrl={themeUrl}
+        file={themeFile} setFile={setThemeFile}
+        uploading={themeUploading} setUploading={setThemeUploading}
+        onUpload={async (file) => {
+          const url = await uploadImage(file, "theme", setThemeUrl);
+          if (url) {
+            await supabase.from("monthly_theme").update({ image_url: url, updated_at: new Date().toISOString() }).eq("id", 1);
+            setToast({ msg:"Monthly theme updated!", type:"success" });
+          }
+        }}
+      />
+
+      <UploadCard
+        title="App Background (All Pages)"
+        desc="Subtle background applied across the entire app."
+        currentUrl={bgUrl}
+        file={bgFile} setFile={setBgFile}
+        uploading={bgUploading} setUploading={setBgUploading}
+        onUpload={async (file) => {
+          const url = await uploadImage(file, "bg", setBgUrl);
+          if (url) {
+            await supabase.from("app_settings").upsert({ key:"bg_url", value:url }, { onConflict:"key" });
+            setToast({ msg:"App background updated!", type:"success" });
+          }
+        }}
+      />
+
+      <UploadCard
+        title="Finance Page Background"
+        desc="Background shown only on the Finance page."
+        currentUrl={finUrl}
+        file={finFile} setFile={setFinFile}
+        uploading={finUploading} setUploading={setFinUploading}
+        onUpload={async (file) => {
+          const url = await uploadImage(file, "finance-bg", setFinUrl);
+          if (url) {
+            await supabase.from("app_settings").upsert({ key:"finance_bg_url", value:url }, { onConflict:"key" });
+            setToast({ msg:"Finance background updated!", type:"success" });
+          }
+        }}
+      />
+
+      <UploadCard
+        title="Announcements Page Background"
+        desc="Background shown only on the Announcements page."
+        currentUrl={annUrl}
+        file={annFile} setFile={setAnnFile}
+        uploading={annUploading} setUploading={setAnnUploading}
+        onUpload={async (file) => {
+          const url = await uploadImage(file, "ann-bg", setAnnUrl);
+          if (url) {
+            await supabase.from("app_settings").upsert({ key:"announcement_bg_url", value:url }, { onConflict:"key" });
+            setToast({ msg:"Announcements background updated!", type:"success" });
+          }
+        }}
+      />
     </div>
   );
 };
@@ -2807,14 +2893,26 @@ export default function App() {
   const [logoUrl, setLogoUrl] = useState("");
   const mob = useIsMobile();
 
-  const [themeUrl, setThemeUrl] = useState("");
+  // REPLACE with:
+const [themeUrl, setThemeUrl] = useState("");
+const [bgUrl, setBgUrl] = useState("");
+const [financeBgUrl, setFinanceBgUrl] = useState("");
+const [annBgUrl, setAnnBgUrl] = useState("");
 
-  useEffect(() => {
-    supabase.from("app_settings").select("value").eq("key", "logo_url").single()
-      .then(({ data }) => { if (data?.value) setLogoUrl(data.value); });
-    supabase.from("monthly_theme").select("image_url").eq("id", 1).single()
-      .then(({ data }) => { if (data?.image_url) setThemeUrl(data.image_url); });
-  }, []);
+useEffect(() => {
+  supabase.from("app_settings").select("key, value")
+    .in("key", ["logo_url","bg_url","finance_bg_url","announcement_bg_url"])
+    .then(({ data }) => {
+      if (data) data.forEach(r => {
+        if (r.key === "logo_url")              setLogoUrl(r.value || "");
+        if (r.key === "bg_url")                setBgUrl(r.value || "");
+        if (r.key === "finance_bg_url")        setFinanceBgUrl(r.value || "");
+        if (r.key === "announcement_bg_url")   setAnnBgUrl(r.value || "");
+      });
+    });
+  supabase.from("monthly_theme").select("image_url").eq("id", 1).single()
+    .then(({ data }) => { if (data?.image_url) setThemeUrl(data.image_url); });
+  }, []);   
 
   const renderPage = () => {
     const role = auth.profile.role;
@@ -2832,10 +2930,10 @@ export default function App() {
   case "attendance":     return role === "regular"
                            ? <MyAttendancePage />
                            : <AttendancePage />;
-  case "finance":        return <FinancePage     role={role} user={user}/>;
+  case "finance":        return <FinancePage     role={role} user={user} bg={financeBgUrl}/>;
   case "reports":        return <ReportsPage     role={role}/>;
   case "members":        return <MembersPage     role={role}/>;
-  case "announcements":  return <AnnouncementsPage/>;          // ← add this
+  case "announcements":  return <AnnouncementsPage bg={annBgUrl}/>;
   case "qr":             return <QRGeneratorPage />;
   case "myqr":           return <MyQRPage        user={user}/>;
   case "scanner":        return <ScannerPage     role={role}/>;
@@ -2867,7 +2965,12 @@ export default function App() {
         mobile={mob} showMob={showMob} setShowMob={setShowMob} logo={logoUrl}/>
 
       {/* Main */}
-      <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, overflow:"hidden" }}>
+      <div style={{
+        flex:1, overflowY:"auto", padding: mob?"16px":"24px 28px",
+        background: bgUrl
+          ? `linear-gradient(rgba(232,237,245,.92), rgba(232,237,245,.92)), url(${bgUrl}) center/cover no-repeat fixed`
+          : undefined,
+      }}>
         <Topbar role={role} page={page} user={user}
           collapsed={collapsed} setCollapsed={setCollapsed}
           mobile={mob} setShowMob={setShowMob}/>
