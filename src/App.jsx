@@ -804,6 +804,24 @@ const GamStrip = ({ user }) => {
     </div>
   );
 };
+
+/* ── AUDIT LOGGER ──────────────────────────── */
+const logAction = async (action, details, entity, entityId) => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data: profile } = await supabase.from("profiles").select("name").eq("id", user.id).maybeSingle();
+    await supabase.from("audit_logs").insert([{
+      user_id: user.id,
+      user_name: profile?.name || user.email || "Unknown",
+      action,
+      details: details || null,
+      entity: entity || null,
+      entity_id: entityId ? String(entityId) : null,
+    }]);
+  } catch { /* fail silently */ }
+};
+
 /* ═══════════════════════════════════════════════════════════
    PAGES
 ═══════════════════════════════════════════════════════════ */
@@ -943,6 +961,7 @@ const AnnouncementsPage = () => {
     setAnnouncements(prev => [data, ...prev]);
     setAForm({ title:"", body:"", tag:"Worship", date:"" });
     setToast({ msg: "Announcement posted!", type: "success" });
+    logAction("announcement_posted", `"${aForm.title}"`, "announcement", data.id);
   }
   setSaving(false);
   };
@@ -962,6 +981,7 @@ const AnnouncementsPage = () => {
     setEvents(prev => [...prev, data]);
     setEForm({ name:"", type:"event", date:"", branch:"" });
     setToast({ msg: "Event added!", type: "success" });
+    logAction("event_added", `"${eForm.name}"`, "event", data.id);
   }
   setSaving(false);
   };
@@ -1285,6 +1305,7 @@ const FinancePage = ({ role, user }) => {
                     setDone(true);
                     setForm({ type:"Tithes", amount:"", note:"" });
                     setRecords(prev => [data, ...prev]);  // ← data now has members populated
+                    logAction("finance_submitted", `₱${form.amount} ${form.type}`, "giving", data.id);
                   }
                 }} full/>
             </>
@@ -1673,6 +1694,7 @@ const ScannerPage = ({ role }) => {
     .update({ points: (member.points || 0) + 10 })
     .eq("id", member.id);
 
+    await logAction("attendance_recorded", `${member.name || parsed.name} checked in`, "attendance", member.id);
   return { status: "ok" };
 };
 
@@ -1880,6 +1902,7 @@ const saveBranch = async () => {
     setBranches(prev => prev.map(b => b.id===editTarget.id ? {...b,...editForm} : b));
     setEditModal(false);
     setToast({ msg:`"${editForm.name}" updated!`, type:"success" });
+    logAction("branch_updated", `Updated "${editForm.name}"`, "branch", editTarget.id);
   }
   setSaving(false);
 };
@@ -1892,6 +1915,7 @@ const deleteBranch = async (b) => {
   } else {
     setBranches(prev => prev.filter(x => x.id !== b.id));
     setToast({ msg:`"${b.name}" deleted`, type:"warn" });
+    logAction("branch_deleted", `Deleted "${b.name}"`, "branch", b.id);
   }
 };
   
@@ -1907,6 +1931,7 @@ const deleteBranch = async (b) => {
       setForm({ name:"", address:"", parent_id:"" });
       setModal(false);
       setToast({ msg:`"${data.name}" branch added!`, type:"success" });
+      logAction("branch_added", `Added "${data.name}"`, "branch", data.id);
     }
     setSaving(false);
   };
@@ -2065,6 +2090,7 @@ const UserManagementPage = ({ role }) => {
           : u
         ));
         setToast({ msg:`${form.name} updated`, type:"success" });
+        logAction("user_updated", `Updated ${form.name}`, "user", selected.id);
         setModal(null);
       }
     } else {
@@ -2081,6 +2107,7 @@ const UserManagementPage = ({ role }) => {
     if (error) { setToast({ msg:"Failed: " + error.message, type:"error" }); return; }
     setUsers(prev => prev.map(x => x.id===u.id ? {...x, role:"deactivated"} : x));
     setToast({ msg:`${u.name} deactivated`, type:"warn" });
+    logAction("user_deactivated", `Deactivated ${u.name}`, "user", u.id);
   };
 
   const reactivateUser = async (u) => {
@@ -2088,6 +2115,7 @@ const UserManagementPage = ({ role }) => {
     if (error) { setToast({ msg:"Failed: " + error.message, type:"error" }); return; }
     setUsers(prev => prev.map(x => x.id===u.id ? {...x, role:"regular"} : x));
     setToast({ msg:`${u.name} re-activated`, type:"success" });
+    logAction("user_activated", `Activated ${u.name}`, "user", u.id);
   };
 
   const deleteUser = async (u) => {
@@ -2096,6 +2124,7 @@ const UserManagementPage = ({ role }) => {
     if (error) { setToast({ msg:"Failed: " + error.message, type:"error" }); return; }
     setUsers(prev => prev.filter(x => x.id !== u.id));
     setToast({ msg:`${u.name} deleted`, type:"error" });
+    logAction("user_deleted", `Deleted ${u.name}`, "user", u.id);
   };
 
   const updateRoleInline = async (u, newRole) => {
@@ -2103,6 +2132,7 @@ const UserManagementPage = ({ role }) => {
     if (error) { setToast({ msg:"Failed: " + error.message, type:"error" }); return; }
     setUsers(prev => prev.map(x => x.id===u.id ? {...x, role:newRole} : x));
     setToast({ msg:`${u.name} → ${newRole}`, type:"success" });
+    logAction("user_role_changed", `${u.name} → ${newRole}`, "user", u.id);
   };
 
   const resetPassword = async (u) => {
@@ -2365,6 +2395,7 @@ const FinanceCategoriesPage = () => {
       setForm({ name:"", description:"" });
       setModal(false);
       setToast({ msg:`"${data.name}" added!`, type:"success" });
+      logAction("category_added", `Added "${data.name}"`, "finance_category", data.id);
     }
     setSaving(false);
   };
@@ -2386,6 +2417,7 @@ const FinanceCategoriesPage = () => {
       setCategories(prev => prev.map(c => c.id === editTarget.id ? { ...c, ...editForm } : c));
       setEditModal(false);
       setToast({ msg:`"${editForm.name}" updated!`, type:"success" });
+      logAction("category_updated", `Updated "${editForm.name}"`, "finance_category", editTarget.id);
     }
     setSaving(false);
   };
@@ -2397,6 +2429,7 @@ const FinanceCategoriesPage = () => {
     else {
       setCategories(prev => prev.filter(x => x.id !== c.id));
       setToast({ msg:`"${c.name}" deleted`, type:"warn" });
+      logAction("category_deleted", `Deleted "${c.name}"`, "finance_category", c.id);
     }
   };
 
