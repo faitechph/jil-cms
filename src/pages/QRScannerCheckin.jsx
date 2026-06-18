@@ -5,7 +5,6 @@ const logAction = async (action, details, entity, entityId) => {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
-    const user = session.user;
     const { data: profile } = await supabase.from("profiles").select("name").eq("id", user.id).maybeSingle();
     const { error } = await supabase.from("audit_logs").insert([{
       user_id: user.id,
