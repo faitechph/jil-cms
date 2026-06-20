@@ -1577,9 +1577,11 @@ const MyQRPage = ({ user }) => {
         <div style={{ fontSize: 12, color: C.mist, marginBottom: 4 }}>{member.member_code}</div>
         <Badge label={rank.name} color={rank.color} />
 
-        <div style={{ display: "flex", justifyContent: "center", margin: "20px 0",
-          padding: 16, border: `1px solid ${C.fog}`, borderRadius: R.lg, background: C.white }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", margin: "20px 0",
+          padding: 16, border: `1px solid ${C.fog}`, borderRadius: R.lg, background: C.white, gap: 10 }}>
           <canvas ref={canvasRef} style={{ maxWidth: "100%" }} />
+          <div style={{ fontWeight: 700, fontSize: 15, color: C.ink, letterSpacing: 0.2, textAlign: "center" }}>{member.name}</div>
+          <div style={{ fontSize: 11, color: C.mist, textAlign: "center" }}>{member.member_code}</div>
         </div>
 
         {/* Member details */}
