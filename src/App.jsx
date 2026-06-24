@@ -8,34 +8,138 @@ import { supabase } from "./lib/supabaseClient";
 import MyAttendancePage from './pages/MyAttendancePage';
 import AttendancePage from './pages/AttendancePage';
 import jsQR from "jsqr";
+
+const C = {
+  ink:"#0A0F1E", ink2:"#1C2336", ink3:"#2E3A52",
+  slate:"#64748B", mist:"#94A3B8", cloud:"#CBD5E1",
+  fog:"#E8EDF5", white:"#FFFFFF",
+  bg:"#E8EDF5", bgSecondary:"#F8FAFC",
+  blue:"#1D4ED8", blue2:"#3B82F6", blue3:"#DBEAFE",
+  green:"#15803D", green2:"#22C55E", green3:"#DCFCE7",
+  amber:"#B45309", amber2:"#F59E0B", amber3:"#FEF3C7",
+  rose:"#BE123C", rose2:"#F43F5E", rose3:"#FFE4E6",
+  violet:"#6D28D9", violet2:"#8B5CF6", violet3:"#EDE9FE",
+};
 /* ═══════════════════════════════════════════════════════════
    DESIGN SYSTEM
 ═══════════════════════════════════════════════════════════ */
-const C = {
-  ink:     "#0A0F1E",
-  ink2:    "#1C2336",
-  ink3:    "#2E3A52",
-  slate:   "#64748B",
-  mist:    "#94A3B8",
-  cloud:   "#CBD5E1",
-  fog:     "#E8EDF5",
-  white:   "#FFFFFF",
-  blue:    "#1D4ED8",
-  blue2:   "#3B82F6",
-  blue3:   "#DBEAFE",
-  green:   "#15803D",
-  green2:  "#22C55E",
-  green3:  "#DCFCE7",
-  amber:   "#B45309",
-  amber2:  "#F59E0B",
-  amber3:  "#FEF3C7",
-  rose:    "#BE123C",
-  rose2:   "#F43F5E",
-  rose3:   "#FFE4E6",
-  violet:  "#6D28D9",
-  violet2: "#8B5CF6",
-  violet3: "#EDE9FE",
-};
+
+export default function App() {
+  const { auth, loading, error, loginWithEmail, logout } = useAuth();
+  const [page, setPage] = useState("dashboard");
+  const [collapsed, setCollapsed] = useState(false);
+  const [showMob, setShowMob] = useState(false);
+  const [churchColor, setChurchColor] = useState("#1D4ED8");
+  const [logoUrl, setLogoUrl] = useState("");
+  const mob = useIsMobile();
+
+  const [themeUrl, setThemeUrl] = useState("");
+
+  useEffect(() => {
+    supabase.from("app_settings").select("key, value")
+  .in("key", ["logo_url"])
+  .then(({ data }) => {
+    if (data) data.forEach(r => {
+      if (r.key === "logo_url") setLogoUrl(r.value || "");
+    });
+  });
+    supabase.from("monthly_theme").select("image_url").eq("id", 1).single()
+      .then(({ data }) => { if (data?.image_url) setThemeUrl(data.image_url); });
+  }, []);
+
+  // Load and sync church color from monthly_theme
+useEffect(() => {
+  supabase.from("monthly_theme").select("color").eq("id", 1).single()
+    .then(({ data }) => {
+      if (data?.color) setChurchColor(data.color);
+    });
+
+  // Listen for real-time updates
+  const subscription = supabase
+    .channel('monthly_theme')
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'monthly_theme', filter: 'id=eq.1' },
+      (payload) => {
+        if (payload.new.color) setChurchColor(payload.new.color);
+      }
+    )
+    .subscribe();
+
+  return () => subscription.unsubscribe();
+}, []);
+
+  const renderPage = () => {
+    const role = auth.profile.role;
+    const user = { 
+      name: auth.profile.name,
+      id: auth.user.id,
+      email: auth.user.email,
+      memberId: auth.profile.member_id, 
+      branch: auth.profile.branch,     
+      branchId: auth.profile.branch_id,
+    };
+    switch(page) {
+      case "dashboard":      return <Dashboard       role={role} user={user}/>;
+      case "attendance":     return role === "regular" ? <MyAttendancePage /> : <AttendancePage />;
+      case "finance":       return <FinancePage role={role} user={user}/>;
+      case "reports": return role === "regular" ? <Dashboard role={role} user={user}/> : <ReportsPage role={role}/>;
+      case "members":        return <MembersPage     role={role}/>;
+      case "announcements": return <AnnouncementsPage/>;
+      case "qr":             return <QRGeneratorPage />;
+      case "myqr":           return <MyQRPage        user={user}/>;
+      case "scanner":        return <ScannerPage     role={role}/>;
+      case "prayer":         return <PrayerPage/>;
+      case "branches":       return <BranchesPage/>;
+      case "settings": return <SettingsPage role={role} C={C}/>;
+      default:               return <Dashboard       role={role} user={user}/>;
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", color:"#94A3B8", background:C.ink }}>
+        Loading…
+      </div>
+    );
+  }
+
+  if (!auth) return <Login onLogin={loginWithEmail} error={error} logo={logoUrl} bg={themeUrl}/>;
+
+  const role = auth.profile.role;
+  const user = { name: auth.profile.name };
+
+  return (
+    <div style={{
+        display:"flex", height:"100vh",
+        fontFamily:"-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Helvetica,sans-serif",
+        background: `${churchColor}15`,
+        overflow:"hidden",
+        "--church-color": churchColor,
+        "--church-color-light": `${churchColor}22`,
+      }}>
+
+      <Sidebar role={role} page={page} setPage={setPage} user={user} onLogout={logout}
+        collapsed={collapsed} setCollapsed={setCollapsed}
+        mobile={mob} showMob={showMob} setShowMob={setShowMob} logo={logoUrl}
+        churchColor={churchColor}/>
+
+      <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, overflow:"hidden" }}>
+        <Topbar role={role} page={page} user={user}
+          collapsed={collapsed} setCollapsed={setCollapsed}
+          mobile={mob} setShowMob={setShowMob}/>
+
+        {role==="regular" && <GamStrip user={user}/>}
+
+          <div style={{ flex:1, overflowY:"auto", padding: mob?"16px":"24px 28px",
+            background: `${churchColor}15`,
+          }}>
+          {renderPage()}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const R = { xs:"6px", sm:"10px", md:"14px", lg:"18px", xl:"24px", xxl:"32px", full:"9999px" };
 const SH = {
@@ -213,18 +317,28 @@ const useIsMobile = () => {
   return mob;
 };
 
-const Card = ({ children, style={}, onClick, hoverable }) => {
+const Card = ({ children, style={}, onClick, hoverable, C }) => {
   const [hov, setHov] = useState(false);
+  
+  // Default colors if C is not provided
+  const defaultTheme = {
+    white: "#FFFFFF",
+    bgSecondary: "#F8FAFC",
+    fog: "#E8EDF5",
+  };
+  
+  const theme = C || defaultTheme;
+  
   return (
     <div
       onClick={onClick}
       onMouseEnter={()=>hoverable&&setHov(true)}
       onMouseLeave={()=>hoverable&&setHov(false)}
       style={{
-        background: C.white,
+        background: theme.bgSecondary || theme.white,
         borderRadius: R.xl,
         boxShadow: hov ? SH.md : SH.sm,
-        border: `1px solid ${C.fog}`,
+        border: `1px solid ${theme.fog || "#E8EDF5"}`,
         padding: "18px 20px",
         transition: "box-shadow .18s, transform .18s",
         transform: hov ? "translateY(-2px)" : "none",
@@ -625,7 +739,6 @@ const MENUS = {
     {id:"dashboard", label:"Dashboard",   I:Ico.home},
     {id:"attendance",label:"Attendance",  I:Ico.attendance},
     {id:"finance",   label:"My Finance",  I:Ico.finance},
-    {id:"reports",   label:"Reports",     I:Ico.report},
     {id:"myqr",      label:"My QR Code",  I:Ico.idcard},
     {id:"prayer",    label:"Prayer",      I:Ico.prayer},
   ],
@@ -659,7 +772,7 @@ const ROLE_TAG = {
   superadmin: {tag:"Dev",      color:C.rose2},
 };
 
-const Sidebar = ({ role, page, setPage, user, onLogout, collapsed, setCollapsed, mobile, showMob, setShowMob, logo }) => {
+const Sidebar = ({ role, page, setPage, user, onLogout, collapsed, setCollapsed, mobile, showMob, setShowMob, logo, churchColor }) => {
   const menu = MENUS[role]||MENUS.regular;
   const rt = ROLE_TAG[role];
 
@@ -667,7 +780,7 @@ const Sidebar = ({ role, page, setPage, user, onLogout, collapsed, setCollapsed,
     <div style={{ width: mobile ? 260 : collapsed ? 64 : 224, background:C.ink, display:"flex", flexDirection:"column", height:"100%", transition:"width .22s", overflow:"hidden" }}>
       {/* Logo */}
       <div style={{ padding: collapsed&&!mobile ? "16px 0" : "20px 16px", display:"flex", alignItems:"center", gap:10, borderBottom:"1px solid rgba(255,255,255,.06)", justifyContent: collapsed&&!mobile?"center":"flex-start" }}>
-        <div style={{ width:36, height:36, borderRadius:R.md, background:"linear-gradient(135deg,#1D4ED8,#7C3AED)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, overflow:"hidden" }}>
+        <div style={{ width:36, height:36, borderRadius:R.md, background:`linear-gradient(135deg,${churchColor},${churchColor}cc)`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, overflow:"hidden" }}>
           {logo
             ? <img src={logo} alt="Logo" style={{ width:"100%", height:"100%", objectFit:"contain" }}/>
             : <Ico.sparkle size={18} color="#fff"/>
@@ -704,7 +817,7 @@ const Sidebar = ({ role, page, setPage, user, onLogout, collapsed, setCollapsed,
                 justifyContent: collapsed&&!mobile ? "center" : "flex-start",
                 position:"relative", transition:"background .15s",
               }}>
-              {active && <div style={{ position:"absolute", left:0, top:"15%", bottom:"15%", width:3, background:C.blue2, borderRadius:"0 3px 3px 0" }}/>}
+              {active && <div style={{ position:"absolute", left:0, top:"15%", bottom:"15%", width:3, background:"var(--church-color)", borderRadius:"0 3px 3px 0" }}/>}
               <m.I size={17} color={active?"#93C5FD":"#64748B"}/>
               {(!collapsed||mobile) && <span style={{ color:active?"#E2E8F0":"#64748B", fontWeight:active?600:400, fontSize:13 }}>{m.label}</span>}
             </button>
@@ -865,12 +978,14 @@ const Dashboard = ({ role, user }) => {
 )}
 
       {/* Stats */}
-      <div style={{ display:"grid", gridTemplateColumns:`repeat(auto-fit,minmax(${mob?140:160}px,1fr))`, gap:12, marginBottom:20 }}>
-        <StatTile icon={Ico.users}      label="Members"        value={SEED_MEMBERS.length} sub={`Active: ${SEED_MEMBERS.filter(m=>m.category==="Official Member").length}`} color={C.blue}    accent="+2 this month"/>
-        <StatTile icon={Ico.attendance} label="Avg Attendance" value="84%"                  sub="Last Sunday: 127"                                                            color={C.violet2} accent="↑ 5% vs last month"/>
-        {isAdmin && <StatTile icon={Ico.finance} label="Total Offerings" value={`₱${total.toLocaleString()}`} sub="This month" color={C.green}/>}
-        {isAdmin && <StatTile icon={Ico.branch}  label="Branches"        value={BRANCHES.length}              sub="All active" color={C.amber}/>}
-      </div>
+      {isAdmin && (
+  <div style={{ display:"grid", gridTemplateColumns:`repeat(auto-fit,minmax(${mob?140:160}px,1fr))`, gap:12, marginBottom:20 }}>
+    <StatTile icon={Ico.users}      label="Members"         value={SEED_MEMBERS.length} sub={`Active: ${SEED_MEMBERS.filter(m=>m.category==="Official Member").length}`} color={C.blue}    accent="+2 this month"/>
+    <StatTile icon={Ico.attendance} label="Avg Attendance"  value="84%"                 sub="Last Sunday: 127"                                                           color={C.violet2} accent="↑ 5% vs last month"/>
+    <StatTile icon={Ico.finance}    label="Total Offerings" value={`₱${total.toLocaleString()}`} sub="This month" color={C.green}/>
+    <StatTile icon={Ico.branch}     label="Branches"        value={BRANCHES.length}     sub="All active"          color={C.amber}/>
+  </div>
+)}
 
       <div style={{ display:"grid", gridTemplateColumns: mob?"1fr":"1fr 300px", gap:16 }}>
         {/* Announcements */}
@@ -1147,7 +1262,7 @@ const FinancePage = ({ role, user, bg }) => {
       {tab==="overview" && (
   <>
     {/* ── Hero Total ── */}
-    <Card style={{ background:"linear-gradient(135deg,#1D4ED8,#7C3AED)", border:"none", marginBottom:16 }}>
+    <Card style={{ background:"linear-gradient(135deg,${churchColor},${churchColor}99)", border:"none", marginBottom:16 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:12 }}>
         <div>
           <div style={{ color:"rgba(255,255,255,.6)", fontSize:12, marginBottom:4 }}>
@@ -1512,33 +1627,24 @@ const MyQRPage = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const canvasRef = useRef(null);
 
-  // Fetch the logged-in user's member record from Supabase
   useEffect(() => {
-  const fetchMember = async () => {
-    if (!user.memberId) {
+    const fetchMember = async () => {
+      if (!user.memberId) { setLoading(false); return; }
+      const { data } = await supabase
+        .from("members").select("*").eq("id", user.memberId).maybeSingle();
+      if (data) setMember(data);
       setLoading(false);
-      return;
-    }
+    };
+    fetchMember();
+  }, [user.memberId]);
 
-    const { data } = await supabase
-      .from("members")
-      .select("*")
-      .eq("id", user.memberId)
-      .maybeSingle();
-
-    if (data) setMember(data);
-    setLoading(false);
-  };
-  fetchMember();
-}, [user.memberId]);
-  // Generate QR once member data is loaded
   useEffect(() => {
     if (!member || !canvasRef.current) return;
     const qrValue = `jil://member?code=${member.member_code}&name=${encodeURIComponent(member.name)}&branch=${encodeURIComponent(member.branch || "")}`;
     QRCode.toCanvas(canvasRef.current, qrValue, {
-      width: 200,
+      width: 260,
       margin: 2,
-      color: { dark: "#0A0F1E", light: "#FFFFFF" },
+      color: { dark: "#000000", light: "#FFFFFF" },
       errorCorrectionLevel: "H",
     }).catch(err => console.error("QR error:", err));
   }, [member]);
@@ -1546,22 +1652,42 @@ const MyQRPage = ({ user }) => {
   const download = () => {
   if (!canvasRef.current) return;
   const qrCanvas = canvasRef.current;
-  const padding = 20;
+  const qrSize = 200;
+  const padding = 24;
+  const footerHeight = 52;
+  const cardW = qrSize + padding * 2;
+  const cardH = qrSize + padding * 2 + footerHeight;
+
   const out = document.createElement("canvas");
-  const size = 200; // must match the width passed to QRCode.toCanvas()
-  out.width = size + padding * 2;
-  out.height = size + 50 + padding * 2;
+  out.width = cardW;
+  out.height = cardH;
   const ctx = out.getContext("2d");
+
   ctx.fillStyle = "#FFFFFF";
-  ctx.fillRect(0, 0, out.width, out.height);
-  ctx.drawImage(qrCanvas, padding, padding);
+  ctx.fillRect(0, 0, cardW, cardH);
+
+  ctx.strokeStyle = "#CBD5E1";
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(1, 1, cardW - 2, cardH - 2);
+
+  ctx.drawImage(qrCanvas, padding, padding, qrSize, qrSize);
+
+  ctx.strokeStyle = "#E8EDF5";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padding, padding + qrSize + 12);
+  ctx.lineTo(cardW - padding, padding + qrSize + 12);
+  ctx.stroke();
+
   ctx.fillStyle = "#0A0F1E";
-  ctx.font = "bold 15px sans-serif";
+  ctx.font = "bold 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText(member.name, out.width / 2, size + padding + 22);
+  ctx.fillText(member.name.toUpperCase(), cardW / 2, padding + qrSize + 30);
+
   ctx.fillStyle = "#94A3B8";
-  ctx.font = "12px sans-serif";
-  ctx.fillText(member.member_code, out.width / 2, size + padding + 40);
+  ctx.font = "11px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+  ctx.fillText(member.member_code, cardW / 2, padding + qrSize + 46);
+
   const link = document.createElement("a");
   link.href = out.toDataURL("image/png");
   link.download = `${member.name.replace(/\s+/g, "-")}-QR.png`;
@@ -1571,66 +1697,86 @@ const MyQRPage = ({ user }) => {
   const rank = getRank(member?.points || 0);
 
   if (loading) return (
-    <div style={{ textAlign: "center", padding: "60px 0", color: C.mist }}>
+    <div style={{ textAlign:"center", padding:"60px 0", color:C.mist }}>
       Loading your QR…
     </div>
   );
 
   if (!member) return (
-    <div style={{ textAlign: "center", padding: "60px 0", color: C.mist }}>
-      <div style={{ fontSize: 14 }}>No member record found for <strong>{user.name}</strong>.</div>
-      <div style={{ fontSize: 12, marginTop: 8 }}>Ask your admin to add you to the members list.</div>
+    <div style={{ textAlign:"center", padding:"60px 0", color:C.mist }}>
+      <div style={{ fontSize:14 }}>No member record found for <strong>{user.name}</strong>.</div>
+      <div style={{ fontSize:12, marginTop:8 }}>Ask your admin to add you to the members list.</div>
     </div>
   );
 
   return (
     <div>
-      <h2 style={{ margin: "0 0 18px", fontWeight: 800, fontSize: 20, color: C.ink }}>My QR Code</h2>
-      <Card style={{ maxWidth: 380, textAlign: "center" }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
-          <Av name={member.name} size={56} />
-        </div>
-        <div style={{ fontWeight: 800, fontSize: 17, color: C.ink, marginTop: 8 }}>{member.name}</div>
-        <div style={{ fontSize: 12, color: C.mist, marginBottom: 4 }}>{member.member_code}</div>
-        <Badge label={rank.name} color={rank.color} />
+      <h2 style={{ margin:"0 0 20px", fontWeight:800, fontSize:20, color:C.ink }}>My QR Code</h2>
 
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", margin: "20px 0",
-          padding: 16, border: `1px solid ${C.fog}`, borderRadius: R.lg, background: C.white, gap: 10 }}>
-          <canvas ref={canvasRef} style={{ maxWidth: "100%" }} />
-          <div style={{ fontWeight: 700, fontSize: 15, color: C.ink, letterSpacing: 0.2, textAlign: "center" }}>{member.name}</div>
-          <div style={{ fontSize: 11, color: C.mist, textAlign: "center" }}>{member.member_code}</div>
-        </div>
+      <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:20 }}>
 
-        {/* Member details */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8,
-          marginBottom: 14, textAlign: "left" }}>
-          <div style={{ background: C.fog, borderRadius: R.md, padding: "10px 12px" }}>
-            <div style={{ fontSize: 10, color: C.mist, fontWeight: 600, textTransform: "uppercase" }}>Branch</div>
-            <div style={{ fontSize: 13, color: C.ink, fontWeight: 600, marginTop: 2 }}>{member.branch?.split("–")[0].trim()}</div>
-          </div>
-          <div style={{ background: C.fog, borderRadius: R.md, padding: "10px 12px" }}>
-            <div style={{ fontSize: 10, color: C.mist, fontWeight: 600, textTransform: "uppercase" }}>Category</div>
-            <div style={{ fontSize: 13, color: C.ink, fontWeight: 600, marginTop: 2 }}>{member.category}</div>
-          </div>
-          <div style={{ background: C.fog, borderRadius: R.md, padding: "10px 12px" }}>
-            <div style={{ fontSize: 10, color: C.mist, fontWeight: 600, textTransform: "uppercase" }}>Type</div>
-            <div style={{ fontSize: 13, color: C.ink, fontWeight: 600, marginTop: 2 }}>{member.type}</div>
-          </div>
-          <div style={{ background: C.fog, borderRadius: R.md, padding: "10px 12px" }}>
-            <div style={{ fontSize: 10, color: C.mist, fontWeight: 600, textTransform: "uppercase" }}>Points</div>
-            <div style={{ fontSize: 13, color: rank.color, fontWeight: 700, marginTop: 2 }}>{member.points || 0} pts</div>
+        {/* ── QR Card — printed card style ── */}
+        <div style={{
+          background: "#ffffff",
+          border: "5px solid #000000",
+          borderRadius: 4,
+          padding: "28px 28px 0 28px",
+          display: "inline-flex",
+          flexDirection: "column",
+          alignItems: "center",
+          boxShadow: SH.lg,
+        }}>
+          <canvas ref={canvasRef} style={{ display:"block" }}/>
+          <div style={{
+            padding: "16px 8px 20px",
+            fontWeight: 800,
+            fontSize: 18,
+            letterSpacing: 1.5,
+            color: "#000000",
+            textTransform: "uppercase",
+            textAlign: "center",
+            fontFamily: "Arial, Helvetica, sans-serif",
+            maxWidth: 260,
+            lineHeight: 1.3,
+          }}>
+            {member.name}
           </div>
         </div>
 
-        <div style={{ background: C.fog, borderRadius: R.md, padding: "12px 14px", fontSize: 12,
-          color: C.slate, textAlign: "left", lineHeight: 1.6 }}>
-          Present this QR code to the attendance scanner at the entrance for instant check-in.
+        {/* Member detail tiles */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8,
+          width:"100%", maxWidth:320 }}>
+          {[
+            { label:"Member Code", value: member.member_code },
+            { label:"Branch",      value: member.branch?.split("–")[0].trim() },
+            { label:"Category",    value: member.category },
+            { label:"Rank",        value: `${rank.name} · ${member.points || 0} pts`, color: rank.color },
+          ].map(item => (
+            <div key={item.label} style={{ background:C.fog, borderRadius:R.md, padding:"10px 12px" }}>
+              <div style={{ fontSize:10, color:C.mist, fontWeight:600,
+                textTransform:"uppercase", letterSpacing:.4 }}>
+                {item.label}
+              </div>
+              <div style={{ fontSize:13, color: item.color || C.ink, fontWeight:600, marginTop:3 }}>
+                {item.value || "—"}
+              </div>
+            </div>
+          ))}
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "center" }}>
-          <Btn label="Download" icon={Ico.download} outline sm onClick={download} />
+        <div style={{ background:C.fog, borderRadius:R.md, padding:"12px 14px", fontSize:12,
+          color:C.slate, textAlign:"center", lineHeight:1.6, maxWidth:320 }}>
+          Present this QR code at the entrance for instant check-in.
         </div>
-      </Card>
+
+        <button onClick={download}
+          style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 28px",
+            borderRadius:R.full, background:C.ink, color:C.white, border:"none",
+            fontWeight:700, fontSize:14, cursor:"pointer", boxShadow:SH.sm }}>
+          ⬇ Download QR Card
+        </button>
+
+      </div>
     </div>
   );
 };
@@ -2568,28 +2714,25 @@ const MonthlyThemePage = () => {
   const [themeFile, setThemeFile] = useState(null);
   const [themeUploading, setThemeUploading] = useState(false);
   const [themeUrl, setThemeUrl] = useState(null);
-  const [bgFile, setBgFile] = useState(null);
-  const [bgUploading, setBgUploading] = useState(false);
-  const [bgUrl, setBgUrl] = useState(null);
-  const [finFile, setFinFile] = useState(null);
-  const [finUploading, setFinUploading] = useState(false);
+  const [themeColor, setThemeColor] = useState("#1D4ED8");
   const [finUrl, setFinUrl] = useState(null);
-  const [annFile, setAnnFile] = useState(null);
-  const [annUploading, setAnnUploading] = useState(false);
   const [annUrl, setAnnUrl] = useState(null);
 
   useEffect(() => {
-    supabase.from("monthly_theme").select("image_url").eq("id", 1).single()
-      .then(({ data }) => { if (data?.image_url) setThemeUrl(data.image_url); });
+    supabase.from("monthly_theme").select("image_url, color").eq("id", 1).single()
+      .then(({ data }) => { 
+        if (data?.image_url) setThemeUrl(data.image_url);
+        if (data?.color) setThemeColor(data.color);
+      });
     supabase.from("app_settings").select("key, value")
-      .in("key", ["bg_url", "finance_bg_url", "announcement_bg_url"])
+      .in("key", ["finance_bg_url", "announcement_bg_url"])
       .then(({ data }) => {
         if (data) data.forEach(r => {
-          if (r.key === "bg_url")              setBgUrl(r.value);
-          if (r.key === "finance_bg_url")      setFinUrl(r.value);
-          if (r.key === "announcement_bg_url") setAnnUrl(r.value);
-        });
-      });
+        if (r.key === "finance_bg_url")      setFinUrl(r.value);
+        if (r.key === "announcement_bg_url") setAnnUrl(r.value);
+    });
+  });
+
   }, []);
 
   const uploadImage = async (file, folder, onSuccess) => {
@@ -2602,12 +2745,25 @@ const MonthlyThemePage = () => {
     return publicUrl;
   };
 
+  const saveThemeColor = async () => {
+    const { error } = await supabase.from("monthly_theme").update({
+      color: themeColor,
+      updated_at: new Date().toISOString()
+    }).eq("id", 1);
+    
+    if (error) {
+      setToast({ msg: "Failed to save color: " + error.message, type: "error" });
+    } else {
+      setToast({ msg: "Theme color saved! App will update.", type: "success" });
+    }
+  };
+
   const UploadCard = ({ title, desc, currentUrl, file, setFile, uploading, setUploading, onUpload }) => (
     <Card style={{ maxWidth:560, marginBottom:16 }}>
-      <h3 style={{ margin:"0 0 6px", fontWeight:700, fontSize:14, color:C.ink }}>{title}</h3>
-      <p style={{ fontSize:12, color:C.mist, marginTop:0, marginBottom:14 }}>{desc}</p>
+      <h3 style={{ margin:"0 0 6px", fontWeight:700, fontSize:14, color:"#0A0F1E" }}>{title}</h3>
+      <p style={{ fontSize:12, color:"#94A3B8", marginTop:0, marginBottom:14 }}>{desc}</p>
       {currentUrl && (
-        <div style={{ marginBottom:14, borderRadius:R.lg, overflow:"hidden" }}>
+        <div style={{ marginBottom:14, borderRadius:"24px", overflow:"hidden" }}>
           <img src={currentUrl} alt="Current" style={{ width:"100%", display:"block", maxHeight:200, objectFit:"cover" }}/>
         </div>
       )}
@@ -2628,7 +2784,77 @@ const MonthlyThemePage = () => {
   return (
     <div>
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)}/>}
-      <h2 style={{ margin:"0 0 18px", fontWeight:800, fontSize:20, color:C.ink }}>Monthly Theme & Backgrounds</h2>
+      <h2 style={{ margin:"0 0 18px", fontWeight:800, fontSize:20, color:"#0A0F1E" }}>Monthly Theme & Backgrounds</h2>
+      
+      {/* THEME COLOR PICKER */}
+      <Card style={{ maxWidth:560, marginBottom:16 }}>
+        <h3 style={{ margin:"0 0 12px", fontWeight:700, fontSize:14, color:"#0A0F1E" }}>
+          🎨 Primary Theme Color
+        </h3>
+        <p style={{ fontSize:12, color:"#94A3B8", margin:"0 0 16px" }}>
+          This color will be used throughout the entire app. Pick the color for this month's theme!
+        </p>
+        
+        {/* Color Preview & Picker */}
+        <div style={{ display:"flex", gap:16, alignItems:"center", marginBottom:16 }}>
+          <div style={{
+            width:80,
+            height:80,
+            borderRadius:"24px",
+            background:themeColor,
+            border:"3px solid #E8EDF5",
+            boxShadow:"0 4px 12px rgba(0,0,0,0.1)",
+            flexShrink:0
+          }}/>
+          <div style={{ flex:1 }}>
+            <label style={{ fontSize:12, fontWeight:600, color:"#64748B", display:"block", marginBottom:8 }}>
+              Pick Color
+            </label>
+            <input 
+              type="color" 
+              value={themeColor} 
+              onChange={e => setThemeColor(e.target.value)}
+              style={{ 
+                width:"100%",
+                height:50,
+                borderRadius:"12px",
+                border:"2px solid #E8EDF5",
+                cursor:"pointer"
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Hex Code Input */}
+        <div style={{ marginBottom:16 }}>
+          <label style={{ fontSize:12, fontWeight:600, color:"#64748B", display:"block", marginBottom:8 }}>
+            Hex Code
+          </label>
+          <input 
+            type="text" 
+            value={themeColor}
+            onChange={e => {
+              const val = e.target.value;
+              if (val.match(/^#[0-9A-F]{6}$/i)) setThemeColor(val);
+            }}
+            placeholder="#1D4ED8"
+            style={{ 
+              width:"100%",
+              padding:"10px 14px",
+              borderRadius:"12px",
+              border:"1.5px solid #CBD5E1",
+              fontSize:13,
+              boxSizing:"border-box",
+              fontWeight:600,
+              fontFamily:"monospace"
+            }}
+          />
+        </div>
+
+        <Btn label="Save Theme Color" onClick={saveThemeColor} full/>
+      </Card>
+
+      {/* THEME IMAGE */}
       <UploadCard
         title="Monthly Theme Banner"
         desc="Shown on the Dashboard and as Login page background."
@@ -2639,45 +2865,6 @@ const MonthlyThemePage = () => {
           if (url) {
             await supabase.from("monthly_theme").update({ image_url: url, updated_at: new Date().toISOString() }).eq("id", 1);
             setToast({ msg:"Monthly theme updated!", type:"success" });
-          }
-        }}
-      />
-      <UploadCard
-        title="App Background (All Pages)"
-        desc="Subtle background applied across the entire app."
-        currentUrl={bgUrl} file={bgFile} setFile={setBgFile}
-        uploading={bgUploading} setUploading={setBgUploading}
-        onUpload={async (file) => {
-          const url = await uploadImage(file, "bg", setBgUrl);
-          if (url) {
-            await supabase.from("app_settings").upsert({ key:"bg_url", value:url }, { onConflict:"key" });
-            setToast({ msg:"App background updated!", type:"success" });
-          }
-        }}
-      />
-      <UploadCard
-        title="Finance Page Background"
-        desc="Background shown only on the Finance page."
-        currentUrl={finUrl} file={finFile} setFile={setFinFile}
-        uploading={finUploading} setUploading={setFinUploading}
-        onUpload={async (file) => {
-          const url = await uploadImage(file, "finance-bg", setFinUrl);
-          if (url) {
-            await supabase.from("app_settings").upsert({ key:"finance_bg_url", value:url }, { onConflict:"key" });
-            setToast({ msg:"Finance background updated!", type:"success" });
-          }
-        }}
-      />
-      <UploadCard
-        title="Announcements Page Background"
-        desc="Background shown only on the Announcements page."
-        currentUrl={annUrl} file={annFile} setFile={setAnnFile}
-        uploading={annUploading} setUploading={setAnnUploading}
-        onUpload={async (file) => {
-          const url = await uploadImage(file, "ann-bg", setAnnUrl);
-          if (url) {
-            await supabase.from("app_settings").upsert({ key:"announcement_bg_url", value:url }, { onConflict:"key" });
-            setToast({ msg:"Announcements background updated!", type:"success" });
           }
         }}
       />
@@ -2770,7 +2957,7 @@ const [logoUploading, setLogoUploading] = useState(false);
 };
 
 /* ── SETTINGS ──────────────────────────── */
-const SettingsPage = ({ role }) => {
+const SettingsPage = ({ role, C, themeName, setThemeName }) => {
   const [subPage, setSubPage] = useState(null);
 
   if (subPage === "users") return (
@@ -2857,6 +3044,18 @@ if (subPage === "app-settings") return (
   </div>
 );
 
+if (subPage === "theme") return (
+  <div>
+    <button onClick={()=>setSubPage(null)}
+      style={{ display:"flex", alignItems:"center", gap:6, border:"none",
+        background:"transparent", cursor:"pointer", color:C.blue,
+        fontWeight:600, fontSize:13, marginBottom:16, padding:0 }}>
+      ← Back to Settings
+    </button>
+    <ThemeSwitcherPage currentTheme={themeName} onThemeChange={setThemeName}/>
+  </div>
+);
+
   const items = [
     { key:"users", I:Ico.users,   label:"User Management",    desc:"Add, edit, deactivate CMS accounts",           color:C.blue },
     { key:"branches",    I:Ico.branch,  label:"Branch Management",  desc:"Configure branch details and leaders",         color:C.violet2 },
@@ -2889,107 +3088,3 @@ if (subPage === "app-settings") return (
     </div>
   );
 };
-
-/* ═══════════════════════════════════════════════════════════
-   APP ROOT
-═══════════════════════════════════════════════════════════ */
-export default function App() {
-  const { auth, loading, error, loginWithEmail, logout } = useAuth();
-  const [page, setPage] = useState("dashboard");
-  const [collapsed, setCollapsed] = useState(false);
-  const [showMob, setShowMob] = useState(false);
-  const [logoUrl, setLogoUrl] = useState("");
-  const mob = useIsMobile();
-
-  const [themeUrl, setThemeUrl] = useState("");
-  const [bgUrl, setBgUrl] = useState("");
-  const [financeBgUrl, setFinanceBgUrl] = useState("");
-  const [annBgUrl, setAnnBgUrl] = useState("");
-
-  useEffect(() => {
-    supabase.from("app_settings").select("key, value")
-      .in("key", ["logo_url","bg_url","finance_bg_url","announcement_bg_url"])
-      .then(({ data }) => {
-        if (data) data.forEach(r => {
-          if (r.key === "logo_url")            setLogoUrl(r.value || "");
-          if (r.key === "bg_url")              setBgUrl(r.value || "");
-          if (r.key === "finance_bg_url")      setFinanceBgUrl(r.value || "");
-          if (r.key === "announcement_bg_url") setAnnBgUrl(r.value || "");
-        });
-      });
-    supabase.from("monthly_theme").select("image_url").eq("id", 1).single()
-      .then(({ data }) => { if (data?.image_url) setThemeUrl(data.image_url); });
-  }, []);
-
-  const renderPage = () => {
-    const role = auth.profile.role;
-    // Change this in renderPage():
-    const user = { 
-    name: auth.profile.name,
-    id: auth.user.id,
-    email: auth.user.email,
-    memberId: auth.profile.member_id, 
-    branch: auth.profile.branch,     
-    branchId: auth.profile.branch_id,
-    };
-    switch(page) {
-  case "dashboard":      return <Dashboard       role={role} user={user}/>;
-  case "attendance":     return role === "regular"
-                           ? <MyAttendancePage />
-                           : <AttendancePage />;
-  case "finance":        return <FinancePage     role={role} user={user} bg={financeBgUrl}/>;
-  case "reports":        return <ReportsPage     role={role}/>;
-  case "members":        return <MembersPage     role={role}/>;
-  case "announcements":  return <AnnouncementsPage bg={annBgUrl}/>;
-  case "qr":             return <QRGeneratorPage />;
-  case "myqr":           return <MyQRPage        user={user}/>;
-  case "scanner":        return <ScannerPage     role={role}/>;
-  case "prayer":         return <PrayerPage/>;
-  case "branches":       return <BranchesPage/>;
-  case "settings":       return <SettingsPage    role={role}/>;
-  default:               return <Dashboard       role={role} user={user}/>;
-  }
-  };
-
-  if (loading) {
-    return (
-      <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", color:"#94A3B8", background:C.ink }}>
-        Loading…
-      </div>
-    );
-  }
-
-  if (!auth) return <Login onLogin={loginWithEmail} error={error} logo={logoUrl} bg={themeUrl}/>;
-
-  const role = auth.profile.role;
-  const user = { name: auth.profile.name };
-
-  return (
-    <div style={{ display:"flex", height:"100vh", fontFamily:"-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Helvetica,sans-serif", background:C.fog, overflow:"hidden" }}>
-      {/* Sidebar */}
-      <Sidebar role={role} page={page} setPage={setPage} user={user} onLogout={logout}
-        collapsed={collapsed} setCollapsed={setCollapsed}
-        mobile={mob} showMob={showMob} setShowMob={setShowMob} logo={logoUrl}/>
-
-      {/* Main */}
-      <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, overflow:"hidden" }}>
-        <Topbar role={role} page={page} user={user}
-          collapsed={collapsed} setCollapsed={setCollapsed}
-          mobile={mob} setShowMob={setShowMob}/>
-
-        {/* Gamification bar for regular users */}
-        {role==="regular" && <GamStrip user={user}/>}
-
-        {/* Scrollable content */}
-        <div style={{
-          flex:1, overflowY:"auto", padding: mob?"16px":"24px 28px",
-          background: bgUrl
-            ? `linear-gradient(rgba(232,237,245,.92), rgba(232,237,245,.92)), url(${bgUrl}) center/cover no-repeat fixed`
-            : undefined,
-        }}>
-          {renderPage()}
-        </div>
-      </div>
-    </div>
-  );
-}

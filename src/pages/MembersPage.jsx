@@ -315,14 +315,50 @@ export default function MembersPage({ role }) {
   const catColor = c => c==="Official Member"?C.blue:c==="First Timer"?C.green:C.amber;
 
   const downloadQR = () => {
-    if (!qrCanvasRef.current) return;
-    const link = document.createElement("a");
-    link.href = qrCanvasRef.current.toDataURL("image/png");
-    link.download = `${qrMember.name.replace(/\s+/g, "-")}-QR.png`;
-    link.click();
-    notify("QR downloaded ✓");
-  };
+  if (!qrCanvasRef.current) return;
+  const qrCanvas = qrCanvasRef.current;
+  const qrSize = 200;
+  const padding = 24;
+  const footerHeight = 52;
+  const cardW = qrSize + padding * 2;
+  const cardH = qrSize + padding * 2 + footerHeight;
 
+  const out = document.createElement("canvas");
+  out.width = cardW;
+  out.height = cardH;
+  const ctx = out.getContext("2d");
+
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(0, 0, cardW, cardH);
+
+  ctx.strokeStyle = "#CBD5E1";
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(1, 1, cardW - 2, cardH - 2);
+
+  ctx.drawImage(qrCanvas, padding, padding, qrSize, qrSize);
+
+  ctx.strokeStyle = "#E8EDF5";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padding, padding + qrSize + 12);
+  ctx.lineTo(cardW - padding, padding + qrSize + 12);
+  ctx.stroke();
+
+  ctx.fillStyle = "#0A0F1E";
+  ctx.font = "bold 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(qrMember.name.toUpperCase(), cardW / 2, padding + qrSize + 30);
+
+  ctx.fillStyle = "#94A3B8";
+  ctx.font = "11px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+  ctx.fillText(qrMember.member_code, cardW / 2, padding + qrSize + 46);
+
+  const link = document.createElement("a");
+  link.href = out.toDataURL("image/png");
+  link.download = `${qrMember.name.replace(/\s+/g, "-")}-QR.png`;
+  link.click();
+  notify("QR downloaded ✓");
+};
   // ── Toggle active/inactive ─────────────────────────────────
   const toggleActive = async (m) => {
     const { error } = await supabase
@@ -928,11 +964,34 @@ export default function MembersPage({ role }) {
             <div style={{ fontSize:12, color:C.mist, marginBottom:14 }}>
               {qrMember.member_code||`JIL-${String(qrMember.id).padStart(6,"0")}`}
             </div>
-            <div style={{ display:"flex", justifyContent:"center", marginBottom:14, padding:"16px",
-              background:C.white, border:`1px solid ${C.fog}`, borderRadius:R.lg }}>
-              <canvas ref={qrCanvasRef} style={{ maxWidth:"100%" }}/>
-            </div>
-            <div style={{ display:"flex", gap:8 }}>
+          <div style={{ display:"flex", justifyContent:"center", marginBottom:14 }}>
+                <div style={{
+                  background: "#ffffff",
+                  border: "5px solid #000000",
+                  borderRadius: 4,
+                  padding: "20px 20px 0 20px",
+                  display: "inline-flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                }}>
+                  <canvas ref={qrCanvasRef} style={{ display:"block", maxWidth:"100%" }}/>
+                  <div style={{
+                    padding: "12px 8px 16px",
+                    fontWeight: 800,
+                    fontSize: 14,
+                    letterSpacing: 1.2,
+                    color: "#000000",
+                    textTransform: "uppercase",
+                    textAlign: "center",
+                    fontFamily: "Arial, Helvetica, sans-serif",
+                    maxWidth: 200,
+                    lineHeight: 1.3,
+                  }}>
+                    {qrMember.name}
+                  </div>
+                </div>
+              </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <Btn label="Download" onClick={downloadQR} full
                 icon={({size,color})=><svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round"><polyline points="21 15 16 20 11 15"/><line x1="16" y1="4" x2="16" y2="20"/></svg>}/>
               <Btn label="Close" outline onClick={()=>setQrMember(null)}/>
