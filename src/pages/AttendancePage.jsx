@@ -203,21 +203,18 @@ function WalkInModal({ open, onClose, activeEvent, onSuccess }) {
   const [events,   setEvents]   = useState([]);
   const [eventId,  setEventId]  = useState("");
   const [saving,   setSaving]   = useState(false);
-  const [msg,      setMsg]      = useState(null); // { text, type }
+  const [msg,      setMsg]      = useState(null);
 
-  // Pre-fill date from active event
   useEffect(() => {
     if (activeEvent?.date) setDate(activeEvent.date);
   }, [activeEvent]);
 
-  // Load service events for the selected date
   useEffect(() => {
     if (!date) return;
     supabase.from("service_events").select("id, event, time, branch")
       .eq("date", date).order("time")
       .then(({ data }) => {
         setEvents(data || []);
-        // Auto-select active event if it matches
         if (activeEvent?.id && data?.find(e => e.id === activeEvent.id)) {
           setEventId(activeEvent.id);
         } else {
@@ -226,7 +223,6 @@ function WalkInModal({ open, onClose, activeEvent, onSuccess }) {
       });
   }, [date, activeEvent]);
 
-  // Debounced member search
   useEffect(() => {
     if (query.trim().length < 2) { setResults([]); return; }
     const t = setTimeout(async () => {
@@ -251,7 +247,6 @@ function WalkInModal({ open, onClose, activeEvent, onSuccess }) {
     setSaving(true);
     setMsg(null);
 
-    // Check for duplicate
     const { data: existing } = await supabase.from("attendance").select("id")
       .eq("member_id", selected.id).eq("service_date", date).maybeSingle();
 
@@ -275,7 +270,6 @@ function WalkInModal({ open, onClose, activeEvent, onSuccess }) {
       return;
     }
 
-    // Award 10 points
     const { data: mData } = await supabase.from("members")
       .select("points").eq("id", selected.id).maybeSingle();
     await supabase.from("members")
@@ -286,7 +280,6 @@ function WalkInModal({ open, onClose, activeEvent, onSuccess }) {
     onSuccess?.();
     logAction("attendance_recorded", `${selected.name} walk-in check-in`, "attendance", selected.id);
 
-    // Auto-clear selection for next entry
     setTimeout(() => { setSelected(null); setQuery(""); setResults([]); setMsg(null); }, 1800);
   };
 
@@ -300,7 +293,6 @@ function WalkInModal({ open, onClose, activeEvent, onSuccess }) {
         </div>
       )}
 
-      {/* Date picker */}
       <div style={{ marginBottom:14 }}>
         <label style={{ fontSize:12, fontWeight:600, color:C.slate, display:"block", marginBottom:5 }}>
           Service Date
@@ -310,7 +302,6 @@ function WalkInModal({ open, onClose, activeEvent, onSuccess }) {
             border:`1.5px solid ${C.cloud}`, fontSize:14, outline:"none", color:C.ink }}/>
       </div>
 
-      {/* Service event picker */}
       <div style={{ marginBottom:16 }}>
         <label style={{ fontSize:12, fontWeight:600, color:C.slate, display:"block", marginBottom:5 }}>
           Service Event {events.length === 0 && <span style={{ color:C.mist, fontWeight:400 }}>(none found for this date)</span>}
@@ -328,7 +319,6 @@ function WalkInModal({ open, onClose, activeEvent, onSuccess }) {
         </select>
       </div>
 
-      {/* Member search */}
       <div style={{ marginBottom:12 }}>
         <label style={{ fontSize:12, fontWeight:600, color:C.slate, display:"block", marginBottom:5 }}>
           Search Member
@@ -339,7 +329,6 @@ function WalkInModal({ open, onClose, activeEvent, onSuccess }) {
             border:`1.5px solid ${C.cloud}`, fontSize:14, outline:"none", color:C.ink }}/>
       </div>
 
-      {/* Search results */}
       {results.length > 0 && !selected && (
         <div style={{ border:`1px solid ${C.fog}`, borderRadius:R.lg, overflow:"hidden", marginBottom:14 }}>
           {results.map((m, i) => (
@@ -362,7 +351,6 @@ function WalkInModal({ open, onClose, activeEvent, onSuccess }) {
         </div>
       )}
 
-      {/* Selected member confirmation */}
       {selected && (
         <div style={{ background:C.green3, border:`1px solid ${C.green2}`, borderRadius:R.lg,
           padding:"12px 14px", marginBottom:16, display:"flex", alignItems:"center", gap:12 }}>
@@ -401,7 +389,6 @@ function ManualOverrideModal({ open, onClose, onSuccess }) {
   const [saving,   setSaving]   = useState(false);
   const [msg,      setMsg]      = useState(null);
 
-  // Load events for selected date
   useEffect(() => {
     if (!date) return;
     supabase.from("service_events").select("id, event, time, branch")
@@ -409,7 +396,6 @@ function ManualOverrideModal({ open, onClose, onSuccess }) {
       .then(({ data }) => { setEvents(data || []); setEventId(data?.[0]?.id || ""); });
   }, [date]);
 
-  // Debounced member search
   useEffect(() => {
     if (query.trim().length < 2) { setResults([]); return; }
     const t = setTimeout(async () => {
@@ -434,7 +420,6 @@ function ManualOverrideModal({ open, onClose, onSuccess }) {
     setSaving(true);
     setMsg(null);
 
-    // Check duplicate
     const { data: existing } = await supabase.from("attendance").select("id")
       .eq("member_id", selected.id).eq("service_date", date).maybeSingle();
 
@@ -459,7 +444,6 @@ function ManualOverrideModal({ open, onClose, onSuccess }) {
       return;
     }
 
-    // Award points
     const { data: mData } = await supabase.from("members")
       .select("points").eq("id", selected.id).maybeSingle();
     await supabase.from("members")
@@ -487,7 +471,6 @@ function ManualOverrideModal({ open, onClose, onSuccess }) {
         </div>
       )}
 
-      {/* Date */}
       <div style={{ marginBottom:14 }}>
         <label style={{ fontSize:12, fontWeight:600, color:C.slate, display:"block", marginBottom:5 }}>
           Service Date (past dates allowed)
@@ -498,7 +481,6 @@ function ManualOverrideModal({ open, onClose, onSuccess }) {
             border:`1.5px solid ${C.cloud}`, fontSize:14, outline:"none", color:C.ink }}/>
       </div>
 
-      {/* Service event */}
       <div style={{ marginBottom:14 }}>
         <label style={{ fontSize:12, fontWeight:600, color:C.slate, display:"block", marginBottom:5 }}>
           Service Event {events.length === 0 && <span style={{ color:C.mist, fontWeight:400 }}>(none found for this date)</span>}
@@ -516,7 +498,6 @@ function ManualOverrideModal({ open, onClose, onSuccess }) {
         </select>
       </div>
 
-      {/* Member search */}
       <div style={{ marginBottom:12 }}>
         <label style={{ fontSize:12, fontWeight:600, color:C.slate, display:"block", marginBottom:5 }}>
           Search Member
@@ -527,7 +508,6 @@ function ManualOverrideModal({ open, onClose, onSuccess }) {
             border:`1.5px solid ${C.cloud}`, fontSize:14, outline:"none", color:C.ink }}/>
       </div>
 
-      {/* Results */}
       {results.length > 0 && !selected && (
         <div style={{ border:`1px solid ${C.fog}`, borderRadius:R.lg, overflow:"hidden", marginBottom:14 }}>
           {results.map((m, i) => (
@@ -547,7 +527,6 @@ function ManualOverrideModal({ open, onClose, onSuccess }) {
         </div>
       )}
 
-      {/* Selected member */}
       {selected && (
         <div style={{ background:C.blue3, border:`1px solid ${C.blue2}`, borderRadius:R.lg,
           padding:"12px 14px", marginBottom:14, display:"flex", alignItems:"center", gap:12 }}>
@@ -561,7 +540,6 @@ function ManualOverrideModal({ open, onClose, onSuccess }) {
         </div>
       )}
 
-      {/* Reason / note */}
       <div style={{ marginBottom:16 }}>
         <label style={{ fontSize:12, fontWeight:600, color:C.slate, display:"block", marginBottom:5 }}>
           Reason / Note <span style={{ color:C.mist, fontWeight:400 }}>(optional)</span>
@@ -582,6 +560,40 @@ function ManualOverrideModal({ open, onClose, onSuccess }) {
 }
 
 // ════════════════════════════════════════════════════════════
+//  SERVICE REPORT COMPONENT
+// ════════════════════════════════════════════════════════════
+const ServiceReport = ({ serviceReports, mob }) => (
+  <div>
+    <div style={{ fontSize:12, color:C.mist, marginBottom:12 }}>
+      {serviceReports.length} service report{serviceReports.length!==1?"s":""}
+    </div>
+    <div style={{ display:"grid", gridTemplateColumns:mob?"1fr":"1fr 1fr", gap:16 }}>
+      {serviceReports.map((report, idx) => (
+        <Card key={idx}>
+          <div style={{ fontWeight:700, fontSize:14, color:C.ink, marginBottom:12 }}>
+            {report.event} · {report.date}
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
+              <span style={{ color:C.slate }}>Total</span>
+              <span style={{ color:C.ink, fontWeight:700 }}>{report.total}</span>
+            </div>
+            {["Kids","Youth","Young Adult","Men","Women","Senior"].map(type => (
+              report[type] > 0 && (
+                <div key={type} style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
+                  <span style={{ color:C.slate }}>{type}</span>
+                  <span style={{ color:C.blue, fontWeight:700 }}>{report[type]}</span>
+                </div>
+              )
+            ))}
+          </div>
+        </Card>
+      ))}
+    </div>
+  </div>
+);
+
+// ════════════════════════════════════════════════════════════
 //  MAIN PAGE
 // ════════════════════════════════════════════════════════════
 export default function AttendancePage() {
@@ -594,17 +606,15 @@ export default function AttendancePage() {
   const [search,  setSearch]    = useState("");
   const [filterBranch, setFilterBranch] = useState("All");
   const [filterCat,    setFilterCat]    = useState("All");
-  const [view, setView] = useState("log"); // log | stats
+  const [view, setView] = useState("log");
 
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart]);
 
-  // Modals
   const [showWalkIn,   setShowWalkIn]   = useState(false);
   const [showOverride, setShowOverride] = useState(false);
   const [toast,        setToast]        = useState(null);
 
-  // Live service status
   const [activeEvent,  setActiveEvent]  = useState(null);
   const [eventExpired, setEventExpired] = useState(false);
   const [loadingEvent, setLoadingEvent] = useState(true);
@@ -645,7 +655,7 @@ export default function AttendancePage() {
     const toISO   = toISODate(weekEnd);
     const { data, error:err } = await supabase.from("attendance")
       .select(`id, service_date, present, created_at, note,
-        members(id, name, member_code, category),
+        members(id, name, member_code, category, type),
         branches(id, name),
         service_events(id, event, time)`)
       .gte("service_date", fromISO).lte("service_date", toISO)
@@ -663,6 +673,7 @@ export default function AttendancePage() {
         member_name: r.members?.name || "—",
         member_code: r.members?.member_code || "—",
         category:    r.members?.category || "—",
+        type:        r.members?.type || "—",
         branch_id:   r.branches?.id,
         branch_name: r.branches?.name || "—",
         event:       r.service_events?.event || "—",
@@ -704,7 +715,24 @@ export default function AttendancePage() {
     const byEvent = {};
     records.forEach(r => { const key=`${r.event||"—"} · ${r.date}`; byEvent[key]=(byEvent[key]||0)+1; });
     const topEvents = Object.entries(byEvent).sort((a,b)=>b[1]-a[1]).slice(0,5);
-    return { total, uniqueMembers, days, maxDay, byBranch, topEvents };
+    const byService = {};
+    records.forEach(r => {
+      const key = `${r.event||"—"}||${r.date}`;
+      if (!byService[key]) byService[key] = {
+        event: r.event||"—", date: r.date,
+        total: 0,
+        Kids:0, Youth:0, "Young Adult":0, Men:0, Women:0, Senior:0, "—":0,
+      };
+      byService[key].total += 1;
+      const t = r.type || "—";
+      if (byService[key][t] !== undefined) byService[key][t] += 1;
+      else byService[key]["—"] = (byService[key]["—"]||0) + 1;
+    });
+    const serviceReports = Object.values(byService).sort((a,b)=>
+      new Date(b.date) - new Date(a.date)
+    );
+
+    return { total, uniqueMembers, days, maxDay, byBranch, topEvents, serviceReports };
   }, [records, weekStart]);
 
   const handleSuccess = () => {
@@ -716,18 +744,15 @@ export default function AttendancePage() {
     <div>
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
 
-      {/* Modals */}
       <WalkInModal open={showWalkIn} onClose={()=>setShowWalkIn(false)}
         activeEvent={activeEvent} onSuccess={handleSuccess}/>
       <ManualOverrideModal open={showOverride} onClose={()=>setShowOverride(false)}
         onSuccess={handleSuccess}/>
 
-      {/* Header */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
         marginBottom:16, flexWrap:"wrap", gap:10 }}>
         <h2 style={{ margin:0, fontWeight:800, fontSize:20, color:C.ink }}>Attendance</h2>
         <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-          {/* Action buttons */}
           <button onClick={()=>setShowWalkIn(true)}
             style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 16px",
               background:C.green, color:C.white, border:"none", borderRadius:R.full,
@@ -740,7 +765,6 @@ export default function AttendancePage() {
               borderRadius:R.full, fontWeight:600, fontSize:13, cursor:"pointer" }}>
             <span style={{ fontSize:15 }}>✏️</span> Override
           </button>
-          {/* Log / Stats toggle */}
           <div style={{ display:"flex", border:`1.5px solid ${C.cloud}`, borderRadius:R.md, overflow:"hidden" }}>
             <button onClick={()=>setView("log")} style={{ padding:"7px 16px", border:"none", cursor:"pointer",
               background: view==="log"?C.blue:C.white, color:view==="log"?C.white:C.slate,
@@ -749,11 +773,14 @@ export default function AttendancePage() {
               borderLeft:`1.5px solid ${C.cloud}`, cursor:"pointer",
               background: view==="stats"?C.blue:C.white, color:view==="stats"?C.white:C.slate,
               fontWeight:600, fontSize:13, transition:"all .15s" }}>Stats</button>
+            <button onClick={()=>setView("report")} style={{ padding:"7px 16px", border:"none",
+              borderLeft:`1.5px solid ${C.cloud}`, cursor:"pointer",
+              background: view==="report"?C.blue:C.white, color:view==="report"?C.white:C.slate,
+              fontWeight:600, fontSize:13, transition:"all .15s" }}>Report</button>
           </div>
         </div>
       </div>
 
-      {/* Live service banner */}
       {!loadingEvent && (activeEvent ? (
         <div style={{ background: eventExpired?C.rose3:C.green3,
           border:`1px solid ${eventExpired?C.rose2:C.green2}`,
@@ -788,7 +815,6 @@ export default function AttendancePage() {
         </div>
       ))}
 
-      {/* Week navigator */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
         gap:10, marginBottom:16, flexWrap:"wrap" }}>
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
@@ -809,7 +835,6 @@ export default function AttendancePage() {
         {!isCurrentWeek && <Pill label="This Week" onClick={()=>setWeekStart(startOfWeek(new Date()))} color={C.blue}/>}
       </div>
 
-      {/* Stat summary */}
       <div style={{ display:"flex", gap:12, marginBottom:18, flexWrap:"wrap" }}>
         <StatCard label="Total Check-ins" value={stats.total} color={C.blue}/>
         <StatCard label="Unique Members" value={stats.uniqueMembers} color={C.green}/>
@@ -884,6 +909,8 @@ export default function AttendancePage() {
             </Card>
           </div>
         </>
+      ) : view==="report" ? (
+        <ServiceReport serviceReports={stats.serviceReports} mob={mob}/>
       ) : (
         <>
           <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap" }}>
