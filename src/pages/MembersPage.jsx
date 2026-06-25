@@ -240,9 +240,9 @@ export default function MembersPage({ role }) {
   const [qrMember,   setQrMember]   = useState(null);
   const qrCanvasRef = useRef(null);
   const [form, setForm] = useState({
-    name:"", birthdate:"", address:"",
-    category:"Official Member", type:"Young Adult",
-    branch:"", lifegroup_leader:""
+  name:"", birthdate:"", address:"", gender:"Male",
+  category:"Official Member", type:"Young Adult",
+  branch:"Main – Pinamalayan", lifegroup_leader:""
   });
   const [uploadState, setUploadState] = useState({ status:"idle", rows:[], error:"" });
   const [branches, setBranches] = useState([]);
@@ -309,6 +309,16 @@ export default function MembersPage({ role }) {
     const d = new Date(bd), now = new Date();
     return now.getFullYear() - d.getFullYear() -
       (now < new Date(now.getFullYear(), d.getMonth(), d.getDate()) ? 1 : 0);
+  };
+
+  const autoType = (birthdate, gender) => {
+  const age = calcAge(birthdate);
+  if (age === null) return null;
+  if (age <= 12)  return "Kids";
+  if (age <= 24)  return "Youth";
+  if (age <= 35)  return "Young Adult";
+  if (age <= 59)  return gender === "Female" ? "Women" : "Men";
+  return "Senior";
   };
 
   const genCode = () => "JIL-" + String(Date.now()) + Math.floor(Math.random()*1000);
@@ -378,6 +388,7 @@ export default function MembersPage({ role }) {
   const payload = {
     name:             form.name.trim(),
     birthdate:        form.birthdate || null,
+    gender:           form.gender,
     address:          form.address.trim(),
     category:         form.category,
     type:             form.type,
@@ -910,7 +921,10 @@ export default function MembersPage({ role }) {
               placeholder="e.g. Maria Santos" required/>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
               <Inp label="Birthdate" type="date" value={form.birthdate}
-                onChange={v=>setForm({...form,birthdate:v})}/>
+                onChange={v => {
+                const type = autoType(v, form.gender);
+                setForm({...form, birthdate:v, ...(type ? {type} : {})});
+              }}/>
               <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
                 <label style={{ fontSize:12, fontWeight:600, color:C.slate }}>Age</label>
                 <div style={{ padding:"10px 14px", border:`1.5px solid ${C.fog}`, borderRadius:R.md,
@@ -919,6 +933,12 @@ export default function MembersPage({ role }) {
                 </div>
               </div>
             </div>
+            <Inp label="Gender" value={form.gender}
+              onChange={v => {
+                const type = autoType(form.birthdate, v);
+                setForm({...form, gender:v, ...(type ? {type} : {})});
+              }}
+              options={["Male","Female"]}/>
             <Inp label="Address" value={form.address} onChange={v=>setForm({...form,address:v})}
               placeholder="e.g. Sto. Tomas, Pinamalayan"/>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
