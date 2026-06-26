@@ -9,6 +9,7 @@ import MyAttendancePage from './pages/MyAttendancePage';
 import AttendancePage from './pages/AttendancePage';
 import jsQR from "jsqr";
 import PrayerPage from './pages/PrayerPage';
+import AnnouncementPage from './pages/AnnouncementPage';
 
 const C = {
   ink:"#0A0F1E", ink2:"#1C2336", ink3:"#2E3A52",
@@ -42,6 +43,7 @@ export default function App() {
   .then(({ data }) => {
     if (data) data.forEach(r => {
       if (r.key === "logo_url") setLogoUrl(r.value || "");
+      if (r.key === "announcement_bg_url") setAnnBgUrl(r.value || "");
     });
   });
     supabase.from("monthly_theme").select("image_url").eq("id", 1).single()
@@ -86,7 +88,7 @@ useEffect(() => {
       case "finance":       return <FinancePage role={role} user={user}/>;
       case "reports":       return role === "regular" ? <Dashboard role={role} user={user}/> : <ReportsPage role={role}/>;
       case "members":       return <MembersPage     role={role} user={user}/>;
-      case "announcements": return <AnnouncementPage bg={annBgUrl} user={user} role={role}/>;
+      case "announcements": return <AnnouncementPage bg="" user={user} role={role}/>;
       case "qr":            return <QRGeneratorPage />;
       case "myqr":          return <MyQRPage        user={user}/>;
       case "scanner":       return <ScannerPage     role={role}/>;
@@ -2156,22 +2158,41 @@ const UserManagementPage = ({ role }) => {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [selected, setSelected] = useState(null);
-  const [form, setForm] = useState({ name:"", email:"", role:"regular", branch_id:"", member_id:"" });
+  const [form, setForm] = useState({ name:"", email:"", password:"", role:"regular", branch_id:"", member_id:"" });
   const [branches, setBranches] = useState([]);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("all");
+  const [memberSearch, setMemberSearch] = useState("");
   const mob = useIsMobile();
 
   useEffect(() => {
+    const fetchAllMembers = async () => {
+      let all = [];
+      let from = 0;
+      const CHUNK = 1000;
+      while (true) {
+        const { data, error } = await supabase
+          .from("members")
+          .select("id, name, member_code")
+          .order("name", { ascending: true })
+          .range(from, from + CHUNK - 1);
+        if (error || !data || data.length === 0) break;
+        all = [...all, ...data];
+        if (data.length < CHUNK) break;
+        from += CHUNK;
+      }
+      return all;
+    };
+
     Promise.all([
       supabase.from("profiles").select("id, name, role, branch_id, member_id, branches(name)").order("name"),
-      supabase.from("members").select("id, name, member_code").order("name"),
+      fetchAllMembers(),
       supabase.from("branches").select("id, name").order("name"),
     ]).then(([u, m, b]) => {
       if (u.data) setUsers(u.data);
-      if (m.data) setMembers(m.data);
+      setMembers(m);
       if (b.data) setBranches(b.data);
       setLoading(false);
     });
@@ -2179,13 +2200,13 @@ const UserManagementPage = ({ role }) => {
 
   const openEdit = (u) => {
     setSelected(u);
-    setForm({ name:u.name||"", email:u.email||"", role:u.role||"regular", branch_id:u.branch_id||"", member_id:u.member_id||"" });
+    setForm({ name:u.name||"", email:u.email||"", password:"", role:u.role||"regular", branch_id:u.branch_id||"", member_id:u.member_id||"" });
     setModal("edit");
   };
 
   const openInvite = () => {
     setSelected(null);
-    setForm({ name:"", email:"", role:"regular", branch_id:"", member_id:"" });
+    setForm({ name:"", email:"", password:"", role:"regular", branch_id:"", member_id:"" });
     setModal("invite");
   };
 
@@ -2210,9 +2231,39 @@ const UserManagementPage = ({ role }) => {
         setModal(null);
       }
     } else {
-      const { error } = await supabase.auth.admin?.inviteUserByEmail?.(form.email);
-      if (error) setToast({ msg:"Invite failed: " + error.message, type:"error" });
-      else { setToast({ msg:`Invite sent to ${form.email}`, type:"success" }); setModal(null); }
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+
+      if (!accessToken) {
+        setToast({ msg:"Your session has expired. Please log out and back in.", type:"error" });
+        setSaving(false);
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke("create-user", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: {
+          name: form.name,
+          email: form.email,
+          password: form.password,
+          role: form.role,
+          branch_id: form.branch_id || null,
+          member_id: form.member_id || null,
+        },
+      });
+      if (error || data?.error) {
+        setToast({ msg:"Create failed: " + (data?.error || error.message), type:"error" });
+      } else {
+        // NEW
+        setUsers(prev => [...prev, {
+          id: data.userId, name: form.name, email: form.email, role: form.role,
+          branch_id: form.branch_id, member_id: form.member_id,
+          branches: branches.find(b=>b.id===form.branch_id),
+        }]);
+        setToast({ msg:`${form.name} created successfully`, type:"success" });
+        setModal(null);
+        logAction("user_created", `Created ${form.name} (${form.email})`, "user", data.userId);
+      }
     }
     setSaving(false);
   };
@@ -2274,6 +2325,11 @@ const UserManagementPage = ({ role }) => {
       u.email?.toLowerCase().includes(search.toLowerCase());
     const matchRole = filterRole === "all" || u.role === filterRole;
     return matchSearch && matchRole;
+  });
+
+  const filteredMembers = members.filter(m => {
+    const q = memberSearch.toLowerCase();
+    return m.name?.toLowerCase().includes(q) || m.member_code?.toLowerCase().includes(q);
   });
 
   const canResetPassword = role === "superadmin" || role === "admin";
@@ -2437,9 +2493,40 @@ const UserManagementPage = ({ role }) => {
 
       {/* Edit / Invite Modal */}
       <Modal open={!!modal} onClose={()=>setModal(null)} title={modal==="invite"?"Invite New User":"Edit User"}>
-        <Inp label="Full Name" value={form.name} onChange={v=>setForm({...form,name:v})} placeholder="Juan dela Cruz" required/>
+        <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:14 }}>
+          <label style={{ fontSize:12, fontWeight:600, color:C.slate }}>Link to Member Record</label>
+          <input value={memberSearch} onChange={e=>setMemberSearch(e.target.value)}
+            placeholder="Search members by name or code…"
+            style={{ padding:"9px 14px", border:`1.5px solid ${C.cloud}`, borderRadius:R.md,
+              fontSize:13, outline:"none", color:C.ink, marginBottom:6, boxSizing:"border-box" }}/>
+          <select value={form.member_id} onChange={e=>{
+              const memberId = e.target.value;
+              const picked = members.find(m=>m.id===memberId);
+              setForm({...form, member_id: memberId, ...(picked ? { name: picked.name } : {}) });
+            }}
+            style={{ padding:"10px 14px", border:`1.5px solid ${C.fog}`, borderRadius:R.md, fontSize:14, outline:"none", background:C.white, color:C.ink }}>
+            <option value="">— Not linked —</option>
+            {filteredMembers.map(m=><option key={m.id} value={m.id}>{m.name} ({m.member_code})</option>)}
+          </select>
+          {memberSearch && (
+            <div style={{ fontSize:11, color:C.mist, marginTop:4 }}>
+              {filteredMembers.length} match{filteredMembers.length!==1?"es":""}
+            </div>
+          )}
+        </div>
+        {form.member_id && (
+          <div style={{ background:C.green3, borderRadius:R.md, padding:"10px 14px", fontSize:12, color:C.green, marginBottom:14 }}>
+            ✓ Name auto-filled from member record. Giving, attendance, and QR will be linked to this member record.
+          </div>
+        )}
+        {!form.member_id && (
+          <Inp label="Full Name" value={form.name} onChange={v=>setForm({...form,name:v})} placeholder="Juan dela Cruz" required/>
+        )}
         {modal==="invite" && (
-          <Inp label="Email Address" value={form.email} onChange={v=>setForm({...form,email:v})} placeholder="juan@example.com" required/>
+          <>
+            <Inp label="Email Address" value={form.email} onChange={v=>setForm({...form,email:v})} placeholder="juan@example.com" required/>
+            <Inp label="Password" type="password" value={form.password} onChange={v=>setForm({...form,password:v})} placeholder="At least 6 characters" required/>
+          </>
         )}
         <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:14 }}>
           <label style={{ fontSize:12, fontWeight:600, color:C.slate }}>Role</label>
@@ -2458,19 +2545,6 @@ const UserManagementPage = ({ role }) => {
             {branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
         </div>
-        <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:14 }}>
-          <label style={{ fontSize:12, fontWeight:600, color:C.slate }}>Link to Member Record</label>
-          <select value={form.member_id} onChange={e=>setForm({...form,member_id:e.target.value})}
-            style={{ padding:"10px 14px", border:`1.5px solid ${C.fog}`, borderRadius:R.md, fontSize:14, outline:"none", background:C.white, color:C.ink }}>
-            <option value="">— Not linked —</option>
-            {members.map(m=><option key={m.id} value={m.id}>{m.name} ({m.member_code})</option>)}
-          </select>
-        </div>
-        {form.member_id && (
-          <div style={{ background:C.green3, borderRadius:R.md, padding:"10px 14px", fontSize:12, color:C.green, marginBottom:14 }}>
-            ✓ Giving, attendance, and QR will be linked to this member record.
-          </div>
-        )}
         <div style={{ display:"flex", gap:8 }}>
           <Btn label={saving?"Saving…":modal==="invite"?"Send Invite":"Save Changes"} icon={Ico.send} onClick={saveUser} full/>
           {modal==="edit" && canResetPassword && (

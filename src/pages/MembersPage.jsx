@@ -444,6 +444,7 @@ export default function MembersPage({ role }) {
       type:             m.type || "Young Adult",
       branch:           m.branch || "",
       lifegroup_leader: m.lifegroup_leader || "",
+      gender:           m.gender || "",
     });
     setEditId(m.id);
     setTab("manual");
@@ -595,7 +596,14 @@ export default function MembersPage({ role }) {
         <h2 style={{ margin:0, fontWeight:800, fontSize:20, color:C.ink }}>Members</h2>
         <div style={{ display:"flex", gap:8, alignItems:"center" }}>
           <ViewToggle view={view} setView={setView}/>
-          <Btn label="Add Member" onClick={()=>{ setEditId(null); setTab("manual"); setShowModal(true); }} sm
+          <Btn label="Add Member" onClick={()=>{
+            setEditId(null);
+            setForm({ name:"", birthdate:"", address:"", gender:"Male",
+              category:"Official Member", type:"Young Adult",
+              branch:"Main – Pinamalayan", lifegroup_leader:"" });
+            setTab("manual");
+            setShowModal(true);
+          }} sm
             icon={({size,color})=><svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>}/>
           {role==="superadmin" && (
             <Btn label="Upload Sheet" outline sm
@@ -816,7 +824,14 @@ export default function MembersPage({ role }) {
       )}
 
       {/* ── Add / Edit Modal ─────────────────────────────────── */}
-      <Modal open={showModal} onClose={()=>{ setShowModal(false); setEditId(null); resetUpload(); }}
+      <Modal open={showModal} onClose={()=>{
+        setShowModal(false);
+        setEditId(null);
+        resetUpload();
+        setForm({ name:"", birthdate:"", address:"", gender:"Male",
+          category:"Official Member", type:"Young Adult",
+          branch:"Main – Pinamalayan", lifegroup_leader:"" });
+      }}
         title={editId?"Edit Member":"Add Member"} width={480}>
 
         {!editId && (
@@ -979,7 +994,13 @@ export default function MembersPage({ role }) {
               <Btn label={saving?"Saving…":(editId?"Save Changes":"Add Member")}
                 onClick={save} disabled={saving} full
                 icon={({size,color})=><svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}/>
-              <Btn label="Cancel" onClick={()=>{ setShowModal(false); setEditId(null); }} outline full/>
+              <Btn label="Cancel" onClick={()=>{
+                setShowModal(false);
+                setEditId(null);
+                setForm({ name:"", birthdate:"", address:"", gender:"Male",
+                  category:"Official Member", type:"Young Adult",
+                  branch:"Main – Pinamalayan", lifegroup_leader:"" });
+              }} outline full/>
             </div>
           </>
         )}
