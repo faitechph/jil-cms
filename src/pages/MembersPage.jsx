@@ -15,7 +15,7 @@ const C = {
 const R = { xs:"6px", sm:"10px", md:"14px", lg:"18px", xl:"24px", xxl:"32px", full:"9999px" };
 const SH = { sm:"0 2px 8px rgba(0,0,0,.07)", md:"0 4px 20px rgba(0,0,0,.09)" };
 
-const CATEGORIES   = ["Official Member","First Timer","Guest"];
+const CATEGORIES = ["WSAM","LGAM","WSAM/LGAM","First Timer","Guest"];
 const MEMBER_TYPES = ["Kids","Youth","Young Adult","Men","Women","Senior"];
 
 const SHEETJS_CDN = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
@@ -104,7 +104,7 @@ const Av = ({ name, size=36 }) => (
 );
 
 const Btn = ({ label, onClick, color=C.blue, outline, icon:IcoComp, sm, full, danger, disabled }) => {
-  const bg = disabled?"#E2E8F0":danger?C.rose2:outline?"transparent":color;
+  const bg = disabled?"#E2E8F0":outline?"transparent":danger?C.rose2:color;
   const fg = disabled?C.mist:outline?(danger?C.rose2:color):C.white;
   const brd = disabled?C.cloud:danger?C.rose2:color;
   return (
@@ -322,7 +322,12 @@ export default function MembersPage({ role }) {
   };
 
   const genCode = () => "JIL-" + String(Date.now()) + Math.floor(Math.random()*1000);
-  const catColor = c => c==="Official Member"?C.blue:c==="First Timer"?C.green:C.amber;
+  const catColor = c =>
+  c==="WSAM"        ? C.blue   :
+  c==="LGAM"        ? C.violet2:
+  c==="WSAM/LGAM"   ? C.green  :
+  c==="First Timer" ? C.amber  :
+  C.rose2;
 
   const downloadQR = () => {
   if (!qrCanvasRef.current) return;
@@ -673,7 +678,7 @@ export default function MembersPage({ role }) {
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6,
                       fontSize:12, color:C.slate, marginBottom:12 }}>
                       <div>🎂 {m.birthdate||"—"}</div>
-                      <div>Age {m.age||"—"}</div>
+                      <div>Age {m.birthdate ? calcAge(m.birthdate) : "—"}</div>
                       <div style={{ gridColumn:"1/-1", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
                         📍 {m.address||"—"}
                       </div>
@@ -705,9 +710,8 @@ export default function MembersPage({ role }) {
                           <Btn label="Restore" outline sm color={C.green} onClick={()=>setStatus(m,"Active")}/>
                         )}
                       {role==="superadmin" && (
-                        <Btn label="Delete" outline sm danger onClick={()=>deleteMember(m.id,m.name)}
-                          icon={({size,color})=><svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>}/>
-                      )}
+                          <Btn label="Delete" outline sm danger onClick={()=>deleteMember(m.id,m.name)}/>
+                        )}
                     </div>
                   </Card>
                 );

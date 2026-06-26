@@ -155,7 +155,7 @@ const SH = {
 ═══════════════════════════════════════════════════════════ */
 const BRANCHES = ["Main – Pinamalayan","Sta. Rita","Buli","Inclanay","Luma"];
 const FINANCE_TYPES = ["Tithes","Offering","Pledges","Mission","Support","iCare","First Fruit"];
-const CATEGORIES = ["Official Member","First Timer","Guest"];
+const CATEGORIES = ["WSAM","LGAM","WSAM/LGAM","First Timer","Guest"];
 const MEMBER_TYPES = ["Kids","Youth","Young Adult","Men","Women","Senior"];
 
 const SEED_MEMBERS = [
