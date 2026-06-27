@@ -946,9 +946,327 @@ const logAction = async (action, details, entity, entityId) => {
     return err;
   }
 };
+
+const REACTION_EMOJIS = ["🙏","❤️","🔥","👏","😊","🎉"];
+
+const AnnouncementDetailModal = ({ open, item, onClose, user }) => {
+  const [reactions,    setReactions]    = useState({});
+  const [myReactions,  setMyReactions]  = useState(new Set());
+  const [loadingReact, setLoadingReact] = useState(false);
+
+  useEffect(() => {
+    if (!open || !item?.id) return;
+    loadReactions();
+  }, [open, item?.id]);
+
+  const loadReactions = async () => {
+    const { data } = await supabase.from("announcement_reactions")
+      .select("emoji, member_id").eq("announcement_id", item.id);
+    const counts = {}, mine = new Set();
+    (data||[]).forEach(r => {
+      counts[r.emoji] = (counts[r.emoji]||0) + 1;
+      if (r.member_id === user?.memberId) mine.add(r.emoji);
+    });
+    setReactions(counts);
+    setMyReactions(mine);
+  };
+
+  const handleReact = async (emoji) => {
+    if (!user?.memberId || loadingReact) return;
+    setLoadingReact(true);
+    if (myReactions.has(emoji)) {
+      await supabase.from("announcement_reactions")
+        .delete().eq("announcement_id", item.id)
+        .eq("member_id", user.memberId).eq("emoji", emoji);
+    } else {
+      await supabase.from("announcement_reactions").insert({
+        announcement_id: item.id, member_id: user.memberId, emoji,
+      });
+    }
+    await loadReactions();
+    setLoadingReact(false);
+  };
+
+  if (!open || !item) return null;
+  const color = TAG_COLORS[item.tag] || TAG_COLORS.Default;
+
+  return (
+    <Modal open={open} onClose={onClose} width={520}>
+      <div style={{ borderLeft:`4px solid ${color}`, paddingLeft:14, marginBottom:20 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+          <Badge label={item.tag||"Announcement"} color={color}/>
+          <span style={{ fontSize:11, color:C.mist }}>{item.date}</span>
+        </div>
+        <h2 style={{ margin:"0 0 10px", fontWeight:800, fontSize:20, color:C.ink }}>{item.title}</h2>
+        <p style={{ margin:0, fontSize:14, color:C.slate, lineHeight:1.7 }}>{item.body}</p>
+      </div>
+
+      <div style={{ paddingTop:16, borderTop:`1px solid ${C.fog}` }}>
+        <div style={{ fontSize:12, fontWeight:600, color:C.mist, marginBottom:10,
+          textTransform:"uppercase", letterSpacing:.4 }}>Reactions</div>
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+          {REACTION_EMOJIS.map(emoji => {
+            const count = reactions[emoji]||0;
+            const reacted = myReactions.has(emoji);
+            return (
+              <button key={emoji} onClick={()=>handleReact(emoji)}
+                style={{ display:"flex", alignItems:"center", gap:5, padding:"7px 14px",
+                  borderRadius:R.full, border:`1.5px solid ${reacted?color:C.cloud}`,
+                  background:reacted?`${color}18`:C.white,
+                  cursor:"pointer", fontSize:16, fontWeight:600, transition:"all .15s" }}>
+                {emoji}
+                {count > 0 && <span style={{ fontSize:12, color:reacted?color:C.slate }}>{count}</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+const EventDetailModal = ({ open, item, onClose, user }) => {
+  const [reactions,    setReactions]    = useState({});
+  const [myReactions,  setMyReactions]  = useState(new Set());
+  const [greetings,    setGreetings]    = useState([]);
+  const [newGreeting,  setNewGreeting]  = useState("");
+  const [sending,      setSending]      = useState(false);
+  const [loadingReact, setLoadingReact] = useState(false);
+  const isBirthday = item?.type === "birthday";
+
+  useEffect(() => {
+    if (!open || !item?.id) return;
+    loadReactions();
+    if (isBirthday) loadGreetings();
+  }, [open, item?.id]);
+
+  const loadReactions = async () => {
+    const { data } = await supabase.from("event_reactions")
+      .select("emoji, member_id").eq("event_id", item.id);
+    const counts = {}, mine = new Set();
+    (data||[]).forEach(r => {
+      counts[r.emoji] = (counts[r.emoji]||0) + 1;
+      if (r.member_id === user?.memberId) mine.add(r.emoji);
+    });
+    setReactions(counts);
+    setMyReactions(mine);
+  };
+
+  const loadGreetings = async () => {
+    const { data } = await supabase.from("birthday_greetings")
+      .select("*, members(name)").eq("event_id", item.id)
+      .order("created_at", { ascending:false });
+    setGreetings(data||[]);
+  };
+
+  const handleReact = async (emoji) => {
+    if (!user?.memberId || loadingReact) return;
+    setLoadingReact(true);
+    if (myReactions.has(emoji)) {
+      await supabase.from("event_reactions")
+        .delete().eq("event_id", item.id)
+        .eq("member_id", user.memberId).eq("emoji", emoji);
+    } else {
+      await supabase.from("event_reactions").insert({
+        event_id: item.id, member_id: user.memberId, emoji,
+      });
+    }
+    await loadReactions();
+    setLoadingReact(false);
+  };
+
+  const sendGreeting = async () => {
+    if (!newGreeting.trim() || !user?.memberId) return;
+    setSending(true);
+    const { error } = await supabase.from("birthday_greetings").insert({
+      event_id: item.id, member_id: user.memberId, message: newGreeting.trim(),
+    });
+    if (!error) { setNewGreeting(""); await loadGreetings(); }
+    setSending(false);
+  };
+
+  if (!open || !item) return null;
+
+  const cfg = isBirthday
+    ? { color:C.rose2,   emoji:"🎂", label:"Birthday", reactionEmojis:["🎂","🎉","❤️","🙏","🥳","😊"] }
+    : item.type==="worship"
+    ? { color:C.blue,    emoji:"✨", label:"Worship",  reactionEmojis:REACTION_EMOJIS }
+    : { color:C.violet2, emoji:"📅", label:"Event",    reactionEmojis:REACTION_EMOJIS };
+
+  return (
+    <Modal open={open} onClose={onClose} width={520}>
+      <div style={{ textAlign:"center", marginBottom:20 }}>
+        <div style={{ fontSize:48, marginBottom:8 }}>{cfg.emoji}</div>
+        <Badge label={cfg.label} color={cfg.color}/>
+        <h2 style={{ margin:"10px 0 4px", fontWeight:800, fontSize:20, color:C.ink }}>{item.name}</h2>
+        <div style={{ fontSize:13, color:C.mist }}>
+          {item.date}{item.branch?` · ${item.branch}`:""}
+        </div>
+      </div>
+
+      <div style={{ paddingTop:16, borderTop:`1px solid ${C.fog}`,
+        marginBottom:isBirthday?20:0 }}>
+        <div style={{ fontSize:12, fontWeight:600, color:C.mist, marginBottom:10,
+          textTransform:"uppercase", letterSpacing:.4 }}>
+          {isBirthday ? "Send a reaction 🎉" : "Reactions"}
+        </div>
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+          {cfg.reactionEmojis.map(emoji => {
+            const count = reactions[emoji]||0;
+            const reacted = myReactions.has(emoji);
+            return (
+              <button key={emoji} onClick={()=>handleReact(emoji)}
+                style={{ display:"flex", alignItems:"center", gap:5, padding:"7px 14px",
+                  borderRadius:R.full, border:`1.5px solid ${reacted?cfg.color:C.cloud}`,
+                  background:reacted?`${cfg.color}18`:C.white,
+                  cursor:"pointer", fontSize:16, fontWeight:600, transition:"all .15s" }}>
+                {emoji}
+                {count > 0 && <span style={{ fontSize:12, color:reacted?cfg.color:C.slate }}>{count}</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {isBirthday && (
+        <div>
+          <div style={{ fontSize:12, fontWeight:600, color:C.mist, marginBottom:12,
+            textTransform:"uppercase", letterSpacing:.4 }}>
+            Birthday Greetings ({greetings.length})
+          </div>
+          <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+            <input value={newGreeting} onChange={e=>setNewGreeting(e.target.value)}
+              placeholder="Write a birthday greeting… 🎂"
+              onKeyDown={e=>e.key==="Enter"&&sendGreeting()}
+              style={{ flex:1, padding:"9px 14px", borderRadius:R.full, boxSizing:"border-box",
+                border:`1.5px solid ${C.cloud}`, fontSize:13, outline:"none", color:C.ink }}/>
+            <button onClick={sendGreeting} disabled={!newGreeting.trim()||sending}
+              style={{ padding:"9px 18px", borderRadius:R.full, background:C.rose2,
+                color:C.white, border:"none", fontWeight:700, fontSize:13,
+                cursor:!newGreeting.trim()||sending?"not-allowed":"pointer",
+                opacity:!newGreeting.trim()||sending?0.6:1, flexShrink:0 }}>
+              {sending?"…":"Send 🎉"}
+            </button>
+          </div>
+          {greetings.length === 0 ? (
+            <div style={{ background:C.fog, borderRadius:R.lg, padding:"20px",
+              textAlign:"center", color:C.mist, fontSize:13 }}>
+              No greetings yet — be the first! 🎂
+            </div>
+          ) : (
+            <div style={{ display:"flex", flexDirection:"column", gap:10,
+              maxHeight:280, overflowY:"auto" }}>
+              {greetings.map(g => (
+                <div key={g.id} style={{ background:C.fog, borderRadius:R.lg,
+                  padding:"12px 14px", borderLeft:`3px solid ${C.rose2}` }}>
+                  <div style={{ fontWeight:700, fontSize:12, color:C.rose2, marginBottom:4 }}>
+                    {g.members?.name||"Someone"} 🎉
+                  </div>
+                  <div style={{ fontSize:13, color:C.ink, lineHeight:1.5 }}>{g.message}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
+  );
+};
 /* ═══════════════════════════════════════════════════════════
    PAGES
 ═══════════════════════════════════════════════════════════ */
+
+const InlineReactions = ({ table, idField, rowId, user, emojis }) => {
+  const [reactions,   setReactions]   = useState({});
+  const [myReactions, setMyReactions] = useState(new Set());
+  const EMOJIS = emojis || ["🙏","❤️","🔥","👏","😊","🎉"];
+
+  const load = async () => {
+    const { data } = await supabase.from(table)
+      .select("emoji, member_id").eq(idField, rowId);
+    const counts = {}, mine = new Set();
+    (data||[]).forEach(r => {
+      counts[r.emoji] = (counts[r.emoji]||0) + 1;
+      if (r.member_id === user?.memberId) mine.add(r.emoji);
+    });
+    setReactions(counts);
+    setMyReactions(mine);
+  };
+
+  useEffect(() => { if (rowId) load(); }, [rowId]);
+
+  const toggle = async (emoji) => {
+    if (!user?.memberId) return;
+    const { data: existing } = await supabase.from(table).select("id")
+      .eq(idField, rowId).eq("member_id", user.memberId).eq("emoji", emoji).maybeSingle();
+    if (existing) {
+      await supabase.from(table).delete().eq("id", existing.id);
+    } else {
+      await supabase.from(table).insert({ [idField]: rowId, member_id: user.memberId, emoji });
+    }
+    load();
+  };
+
+  const hasAny = EMOJIS.some(e => reactions[e] > 0);
+
+  return (
+    <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
+      {EMOJIS.map(emoji => {
+        const count = reactions[emoji] || 0;
+        const reacted = myReactions.has(emoji);
+        if (!hasAny && !reacted) return null; // hide empty emojis until someone reacts
+        if (count === 0 && !reacted) return null;
+        return (
+          <button key={emoji} onClick={() => toggle(emoji)}
+            style={{ display:"flex", alignItems:"center", gap:4, padding:"3px 10px",
+              borderRadius:R.full, border:`1.5px solid ${reacted ? C.blue : C.cloud}`,
+              background: reacted ? C.blue3 : C.fog,
+              cursor:"pointer", fontSize:13, fontWeight:600,
+              color: reacted ? C.blue : C.ink, transition:"all .15s" }}>
+            {emoji}
+            <span style={{ fontSize:11, color: reacted ? C.blue : C.mist }}>{count}</span>
+          </button>
+        );
+      })}
+      {/* Always show the + picker */}
+      <EmojiPicker emojis={EMOJIS} onPick={toggle} myReactions={myReactions}/>
+    </div>
+  );
+};
+
+const EmojiPicker = ({ emojis, onPick, myReactions }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position:"relative" }}>
+      <button onClick={() => setOpen(v => !v)}
+        style={{ width:26, height:26, borderRadius:R.full, border:`1.5px solid ${C.cloud}`,
+          background: open ? C.fog : C.white, cursor:"pointer", fontSize:14,
+          display:"flex", alignItems:"center", justifyContent:"center", color:C.slate }}>
+        {open ? "×" : "+"}
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)}
+            style={{ position:"fixed", inset:0, zIndex:50 }}/>
+          <div style={{ position:"absolute", bottom:"calc(100% + 6px)", left:"50%",
+            transform:"translateX(-50%)", background:C.white, borderRadius:14,
+            border:`1px solid ${C.fog}`, boxShadow:SH.md,
+            padding:"8px 10px", display:"flex", gap:4, zIndex:100 }}>
+            {emojis.map(emoji => (
+              <button key={emoji} onClick={() => { onPick(emoji); setOpen(false); }}
+                style={{ width:34, height:34, borderRadius:8, fontSize:17,
+                  border: myReactions.has(emoji) ? `1.5px solid ${C.blue}` : "1.5px solid transparent",
+                  background: myReactions.has(emoji) ? C.blue3 : "transparent",
+                  cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
 /* ── DASHBOARD ──────────────────────────── */
 const TAG_COLORS = {
@@ -964,6 +1282,8 @@ const Dashboard = ({ role, user }) => {
   const [announcements, setAnnouncements] = useState([]);
   const [events, setEvents] = useState([]);
   const [themeUrl, setThemeUrl] = useState(null);
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
+  const [selectedEvent, setSelectedEvent] = useState(null);
 
   useEffect(() => {
     supabase.from("announcements").select("*").order("created_at", { ascending: false })
@@ -977,22 +1297,22 @@ const Dashboard = ({ role, user }) => {
   return (
     <div>
       {themeUrl && (
-  <div style={{ marginBottom:20, borderRadius:R.xl, overflow:"hidden" }}>
-    <img src={themeUrl} alt="Monthly Theme" style={{ width:"100%", display:"block", maxHeight:320, objectFit:"cover" }}/>
-  </div>
-)}
+        <div style={{ marginBottom:20, borderRadius:R.xl, overflow:"hidden" }}>
+          <img src={themeUrl} alt="Monthly Theme" style={{ width:"100%", display:"block", maxHeight:320, objectFit:"cover" }}/>
+        </div>
+      )}
 
-      {/* Stats */}
       {isAdmin && (
-  <div style={{ display:"grid", gridTemplateColumns:`repeat(auto-fit,minmax(${mob?140:160}px,1fr))`, gap:12, marginBottom:20 }}>
-    <StatTile icon={Ico.users}      label="Members"         value={SEED_MEMBERS.length} sub={`Active: ${SEED_MEMBERS.filter(m=>m.category==="Official Member").length}`} color={C.blue}    accent="+2 this month"/>
-    <StatTile icon={Ico.attendance} label="Avg Attendance"  value="84%"                 sub="Last Sunday: 127"                                                           color={C.violet2} accent="↑ 5% vs last month"/>
-    <StatTile icon={Ico.finance}    label="Total Offerings" value={`₱${total.toLocaleString()}`} sub="This month" color={C.green}/>
-    <StatTile icon={Ico.branch}     label="Branches"        value={BRANCHES.length}     sub="All active"          color={C.amber}/>
-  </div>
-)}
+        <div style={{ display:"grid", gridTemplateColumns:`repeat(auto-fit,minmax(${mob?140:160}px,1fr))`, gap:12, marginBottom:20 }}>
+          <StatTile icon={Ico.users}      label="Members"         value={SEED_MEMBERS.length} sub={`Active: ${SEED_MEMBERS.filter(m=>m.category==="Official Member").length}`} color={C.blue}    accent="+2 this month"/>
+          <StatTile icon={Ico.attendance} label="Avg Attendance"  value="84%"                 sub="Last Sunday: 127"                                                           color={C.violet2} accent="↑ 5% vs last month"/>
+          <StatTile icon={Ico.finance}    label="Total Offerings" value={`₱${total.toLocaleString()}`} sub="This month"                                                        color={C.green}/>
+          <StatTile icon={Ico.branch}     label="Branches"        value={BRANCHES.length}     sub="All active"                                                                  color={C.amber}/>
+        </div>
+      )}
 
       <div style={{ display:"grid", gridTemplateColumns: mob?"1fr":"1fr 300px", gap:16 }}>
+
         {/* Announcements */}
         <div>
           <h3 style={{ margin:"0 0 12px", fontWeight:700, fontSize:15, color:C.ink }}>Announcements</h3>
@@ -1002,14 +1322,32 @@ const Dashboard = ({ role, user }) => {
               : announcements.map(a => {
                   const color = TAG_COLORS[a.tag] || TAG_COLORS.Default;
                   return (
-                    <Card key={a.id} style={{ borderLeft:`3px solid ${color}`, padding:"14px 16px" }}>
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:5, gap:8 }}>
-                        <strong style={{ fontSize:14, color:C.ink }}>{a.title}</strong>
-                        {a.tag && <Badge label={a.tag} color={color}/>}
-                      </div>
-                      <p style={{ margin:"0 0 5px", fontSize:13, color:C.slate, lineHeight:1.5 }}>{a.body}</p>
+                    <Card key={a.id} hoverable
+                    onClick={() => setSelectedAnnouncement(a)}
+                    style={{ borderLeft:`3px solid ${color}`, padding:"14px 16px", cursor:"pointer" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between",
+                      alignItems:"flex-start", marginBottom:5, gap:8 }}>
+                      <strong style={{ fontSize:14, color:C.ink }}>{a.title}</strong>
+                      {a.tag && <Badge label={a.tag} color={color}/>}
+                    </div>
+                    <p style={{ margin:"0 0 5px", fontSize:13, color:C.slate, lineHeight:1.5 }}>
+                      {a.body?.length > 80 ? a.body.slice(0, 80) + "…" : a.body}
+                    </p>
+                    <div style={{ display:"flex", justifyContent:"space-between",
+                      alignItems:"center", marginTop:8 }}>
                       <span style={{ fontSize:11, color:C.mist }}>{a.date}</span>
-                    </Card>
+                      <span style={{ fontSize:11, color, fontWeight:600 }}>Tap to read more →</span>
+                    </div>
+                    <div onClick={e => e.stopPropagation()} style={{ marginTop:10, paddingTop:10,
+                      borderTop:`1px solid ${C.fog}` }}>
+                      <InlineReactions
+                        table="announcement_reactions"
+                        idField="announcement_id"
+                        rowId={a.id}
+                        user={user}
+                      />
+                    </div>
+                  </Card>
                   );
                 })
             }
@@ -1030,13 +1368,26 @@ const Dashboard = ({ role, user }) => {
                       ? { color:C.blue,    I:Ico.sparkle }
                       : { color:C.violet2, I:Ico.calendar };
                     return (
-                      <Card key={e.id} style={{ padding:"12px 14px", display:"flex", alignItems:"center", gap:12 }}>
-                        <div style={{ width:36, height:36, borderRadius:R.sm, background:cfg.color+"22", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                          <cfg.I size={16} color={cfg.color}/>
+                      <Card key={e.id} hoverable onClick={() => setSelectedEvent(e)} style={{ padding:"12px 14px" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:8 }}>
+                          <div style={{ width:36, height:36, borderRadius:R.sm, background:cfg.color+"22", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                            <cfg.I size={16} color={cfg.color}/>
+                          </div>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:13, fontWeight:600, color:C.ink }}>{e.name}</div>
+                            <div style={{ fontSize:11, color:C.mist }}>{e.date}{e.branch ? ` · ${e.branch}` : ""}</div>
+                          </div>
                         </div>
-                        <div>
-                          <div style={{ fontSize:13, fontWeight:600, color:C.ink }}>{e.name}</div>
-                          <div style={{ fontSize:11, color:C.mist }}>{e.date}{e.branch ? ` · ${e.branch}` : ""}</div>
+                        <div onClick={ev => ev.stopPropagation()} style={{ paddingTop:8, borderTop:`1px solid ${C.fog}` }}>
+                          <InlineReactions
+                            table="event_reactions"
+                            idField="event_id"
+                            rowId={e.id}
+                            user={user}
+                            emojis={e.type === "birthday" 
+                              ? ["🎂","🎉","❤️","🙏","🥳","😊"] 
+                              : ["🙏","❤️","🔥","👏","😊","🎉"]}
+                          />
                         </div>
                       </Card>
                     );
@@ -1045,6 +1396,301 @@ const Dashboard = ({ role, user }) => {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Modals */}
+      <AnnouncementDetailModal
+        open={!!selectedAnnouncement}
+        item={selectedAnnouncement}
+        onClose={() => setSelectedAnnouncement(null)}
+        user={user}
+      />
+      <EventDetailModal
+        open={!!selectedEvent}
+        item={selectedEvent}
+        onClose={() => setSelectedEvent(null)}
+        user={user}
+      />
+    </div>
+  );
+};
+
+/* ── ANNOUNCEMENT REACTIONS ──────────────────────────── */
+  const AnnouncementReactions = ({ announcementId, user }) => {
+  const [reactions, setReactions]     = useState([]);
+  const [myReactions, setMyReactions] = useState(new Set());
+  const [pickerOpen, setPickerOpen]   = useState(false);
+  const EMOJIS = ["👍", "❤️", "😂", "🙏", "🔥"];
+
+  const load = async () => {
+    const { data } = await supabase
+      .from("announcement_reactions")
+      .select("emoji, member_id")
+      .eq("announcement_id", announcementId);
+    if (!data) return;
+    const counts = {};
+    const mine   = new Set();
+    data.forEach(r => {
+      counts[r.emoji] = (counts[r.emoji] || 0) + 1;
+      if (r.member_id === user?.memberId) mine.add(r.emoji);
+    });
+    setReactions(Object.entries(counts).map(([emoji, count]) => ({ emoji, count })));
+    setMyReactions(mine);
+  };
+
+  useEffect(() => { if (announcementId) load(); }, [announcementId]);
+
+  const toggle = async (emoji) => {
+    if (!user?.memberId) return alert("Log in to react");
+    setPickerOpen(false);
+    const { data: existing } = await supabase
+      .from("announcement_reactions").select("id")
+      .eq("announcement_id", announcementId)
+      .eq("member_id", user.memberId)
+      .eq("emoji", emoji)
+      .maybeSingle();
+    if (existing) {
+      await supabase.from("announcement_reactions").delete().eq("id", existing.id);
+    } else {
+      await supabase.from("announcement_reactions").insert({
+        announcement_id: announcementId,
+        member_id: user.memberId,
+        emoji,
+      });
+    }
+    load();
+  };
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", position: "relative" }}>
+      {reactions.map(r => {
+        const mine = myReactions.has(r.emoji);
+        return (
+          <button key={r.emoji} onClick={() => toggle(r.emoji)}
+            style={{
+              display: "flex", alignItems: "center", gap: 4,
+              padding: "4px 10px", borderRadius: 999,
+              border: `1.5px solid ${mine ? C.blue : C.cloud}`,
+              background: mine ? C.blue3 : C.fog,
+              cursor: "pointer", fontSize: 13, fontWeight: 600,
+              color: mine ? C.blue : C.ink, transition: "all .15s",
+            }}>
+            <span>{r.emoji}</span>
+            <span style={{ fontSize: 11, color: mine ? C.blue : C.mist }}>{r.count}</span>
+          </button>
+        );
+      })}
+
+      {/* + button */}
+      <div style={{ position: "relative" }}>
+        <button onClick={() => setPickerOpen(v => !v)}
+          style={{
+            width: 28, height: 28, borderRadius: 999,
+            border: `1.5px solid ${C.cloud}`,
+            background: pickerOpen ? C.fog : C.white,
+            cursor: "pointer", fontSize: 15,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: C.slate,
+          }}>
+          {pickerOpen ? "×" : "+"}
+        </button>
+
+        {pickerOpen && (
+          <>
+            <div onClick={() => setPickerOpen(false)}
+              style={{ position: "fixed", inset: 0, zIndex: 50 }}/>
+            <div style={{
+              position: "absolute", bottom: "calc(100% + 8px)", left: "50%",
+              transform: "translateX(-50%)",
+              background: C.white, borderRadius: 14,
+              border: `1px solid ${C.fog}`,
+              boxShadow: SH.md,
+              padding: "8px 10px", display: "flex", gap: 4,
+              zIndex: 100,
+            }}>
+              {EMOJIS.map(emoji => {
+                const already = myReactions.has(emoji);
+                return (
+                  <button key={emoji} onClick={() => toggle(emoji)}
+                    style={{
+                      width: 36, height: 36, borderRadius: 8,
+                      border: already ? `1.5px solid ${C.blue}` : "1.5px solid transparent",
+                      background: already ? C.blue3 : "transparent",
+                      cursor: "pointer", fontSize: 18,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      transition: "all .12s",
+                    }}>
+                    {emoji}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const BirthdayGreetings = ({ eventId, user }) => {
+  const [greetings, setGreetings] = useState([]);
+  const [newGreeting, setNewGreeting] = useState("");
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    if (!eventId) return;
+    loadGreetings();
+  }, [eventId]);
+
+  const loadGreetings = async () => {
+    const { data } = await supabase.from("birthday_greetings")
+      .select("*, members(name)").eq("event_id", eventId)
+      .order("created_at", { ascending:false });
+    setGreetings(data||[]);
+  };
+
+  const sendGreeting = async () => {
+    if (!newGreeting.trim() || !user?.memberId) return;
+    setSending(true);
+    const { error } = await supabase.from("birthday_greetings").insert({
+      event_id: eventId, member_id: user.memberId, message: newGreeting.trim(),
+    });
+    if (!error) { setNewGreeting(""); await loadGreetings(); }
+    setSending(false);
+  };
+
+  return (
+    <div>
+      <div style={{ fontSize:12, fontWeight:600, color:C.mist, marginBottom:12,
+        textTransform:"uppercase", letterSpacing:.4 }}>
+        Birthday Greetings ({greetings.length})
+      </div>
+      <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+        <input value={newGreeting} onChange={e=>setNewGreeting(e.target.value)}
+          placeholder="Write a birthday greeting… 🎂"
+          onKeyDown={e=>e.key==="Enter"&&sendGreeting()}
+          style={{ flex:1, padding:"9px 14px", borderRadius:R.full, boxSizing:"border-box",
+            border:`1.5px solid ${C.cloud}`, fontSize:13, outline:"none", color:C.ink }}/>
+        <button onClick={sendGreeting} disabled={!newGreeting.trim()||sending}
+          style={{ padding:"9px 18px", borderRadius:R.full, background:C.rose2,
+            color:C.white, border:"none", fontWeight:700, fontSize:13,
+            cursor: !newGreeting.trim()||sending ? "not-allowed" : "pointer",
+            opacity: !newGreeting.trim()||sending ? 0.6 : 1, flexShrink:0 }}>
+          {sending ? "…" : "Send 🎉"}
+        </button>
+      </div>
+      {greetings.length === 0 ? (
+        <div style={{ background:C.fog, borderRadius:R.lg, padding:"20px",
+          textAlign:"center", color:C.mist, fontSize:13 }}>
+          No greetings yet — be the first! 🎂
+        </div>
+      ) : (
+        <div style={{ display:"flex", flexDirection:"column", gap:10, maxHeight:280, overflowY:"auto" }}>
+          {greetings.map(g => (
+            <div key={g.id} style={{ background:C.fog, borderRadius:R.lg,
+              padding:"12px 14px", borderLeft:`3px solid ${C.rose2}` }}>
+              <div style={{ fontWeight:700, fontSize:12, color:C.rose2, marginBottom:4 }}>
+                {g.members?.name||"Someone"} 🎉
+              </div>
+              <div style={{ fontSize:13, color:C.ink, lineHeight:1.5 }}>{g.message}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ── EVENT REACTIONS ──────────────────────────── */
+const EventReactions = ({ eventId, user }) => {
+  const [reactions, setReactions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    if (!eventId) return;
+    supabase.from("event_reactions")
+      .select("emoji")
+      .eq("event_id", eventId)
+      .then(({ data }) => {
+        if (data) {
+          const grouped = {};
+          data.forEach(r => {
+            grouped[r.emoji] = (grouped[r.emoji] || 0) + 1;
+          });
+          setReactions(Object.entries(grouped).map(([emoji, count]) => ({ emoji, count })));
+        }
+        setLoading(false);
+      });
+  }, [eventId]);
+
+  const toggleReaction = async (emoji) => {
+    if (!user?.memberId) return alert("You must be logged in to react");
+    
+    const { data: existing } = await supabase.from("event_reactions")
+      .select("id").eq("event_id", eventId)
+      .eq("member_id", user.memberId).eq("emoji", emoji).maybeSingle();
+
+    if (existing) {
+      // Remove reaction
+      await supabase.from("event_reactions").delete()
+        .eq("id", existing.id);
+    } else {
+      // Add reaction
+      await supabase.from("event_reactions").insert({
+        event_id: eventId,
+        member_id: user.memberId,
+        emoji,
+      });
+    }
+
+    // Refresh reactions
+    const { data } = await supabase.from("event_reactions")
+      .select("emoji").eq("event_id", eventId);
+    if (data) {
+      const grouped = {};
+      data.forEach(r => {
+        grouped[r.emoji] = (grouped[r.emoji] || 0) + 1;
+      });
+      setReactions(Object.entries(grouped).map(([emoji, count]) => ({ emoji, count })));
+    }
+  };
+
+
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+      {reactions.map(r => (
+        <button key={r.emoji} onClick={() => toggleReaction(r.emoji)}
+          style={{ display:"flex", alignItems:"center", gap:3, padding:"3px 8px",
+            borderRadius:R.full, border:`1px solid ${C.cloud}`, background:C.fog,
+            cursor:"pointer", fontSize:12, fontWeight:600, color:C.ink, transition:"all .15s" }}>
+          <span style={{ fontSize:13 }}>{r.emoji}</span>
+          <span style={{ color:C.mist, fontSize:11 }}>{r.count}</span>
+        </button>
+      ))}
+      <div style={{ position:"relative", display:"inline-block" }}>
+        <button style={{ padding:"3px 8px", borderRadius:R.full, border:`1px solid ${C.cloud}`,
+          background:C.fog, cursor:"pointer", color:C.mist, fontSize:12 }}>
+          +
+        </button>
+        <div style={{ position:"absolute", bottom:"100%", right:0, background:C.white,
+          borderRadius:R.lg, padding:"8px", boxShadow:SH.md, display:"flex", gap:4, marginBottom:8,
+          zIndex:100, opacity:0, pointerEvents:"none", transition:"opacity .15s" }} className="reaction-picker">
+          {REACTION_EMOJIS.map(emoji => (
+            <button key={emoji} onClick={() => toggleReaction(emoji)}
+              style={{ padding:"6px 8px", cursor:"pointer", fontSize:16, border:"none",
+                background:"transparent", borderRadius:R.sm, transition:"all .15s" }}
+              onMouseEnter={e => e.target.style.background = C.fog}
+              onMouseLeave={e => e.target.style.background = "transparent"}>
+              {emoji}
+            </button>
+          ))}
+        </div>
+        <style>{`
+          button:hover + .reaction-picker, .reaction-picker:hover {
+            opacity: 1;
+            pointer-events: auto;
+          }
+        `}</style>
       </div>
     </div>
   );
@@ -1141,27 +1787,38 @@ const AnnouncementsPage = ({ bg }) => {
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
             {announcements.length === 0
               ? <p style={{ color:C.mist, fontSize:13 }}>No announcements yet.</p>
-              : announcements.map(a => {
-                  const color = TAG_COLORS[a.tag] || TAG_COLORS.Default;
-                  return (
-                    <Card key={a.id} style={{ borderLeft:`3px solid ${color}`, padding:"14px 16px" }}>
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8 }}>
-                        <div style={{ flex:1 }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
-                            <strong style={{ fontSize:14, color:C.ink }}>{a.title}</strong>
-                            <Badge label={a.tag} color={color}/>
-                          </div>
-                          <p style={{ margin:"0 0 4px", fontSize:13, color:C.slate, lineHeight:1.5 }}>{a.body}</p>
-                          <span style={{ fontSize:11, color:C.mist }}>{a.date}</span>
-                        </div>
-                        <button onClick={()=>deleteAnnouncement(a.id)}
-                          style={{ border:"none", background:C.rose3, borderRadius:R.sm, padding:"6px 8px", cursor:"pointer", flexShrink:0 }}>
-                          <Ico.trash size={13} color={C.rose2}/>
-                        </button>
-                      </div>
-                    </Card>
-                  );
-                })
+             : announcements.map(a => {
+                const color = TAG_COLORS[a.tag] || TAG_COLORS.Default;
+                return (
+                  <Card key={a.id} hoverable
+                    onClick={() => setSelectedAnnouncement(a)}
+                    style={{ borderLeft:`3px solid ${color}`, padding:"14px 16px", cursor:"pointer" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between",
+                      alignItems:"flex-start", marginBottom:5, gap:8 }}>
+                      <strong style={{ fontSize:14, color:C.ink }}>{a.title}</strong>
+                      {a.tag && <Badge label={a.tag} color={color}/>}
+                    </div>
+                    <p style={{ margin:"0 0 5px", fontSize:13, color:C.slate, lineHeight:1.5 }}>
+                      {a.body?.length > 80 ? a.body.slice(0, 80) + "…" : a.body}
+                    </p>
+                    <div style={{ display:"flex", justifyContent:"space-between",
+                      alignItems:"center", marginTop:8 }}>
+                      <span style={{ fontSize:11, color:C.mist }}>{a.date}</span>
+                      <span style={{ fontSize:11, color, fontWeight:600 }}>Tap to read more →</span>
+                    </div>
+                    {/* Reactions row — stop propagation so clicking emoji doesn't open modal */}
+                    <div onClick={e => e.stopPropagation()} style={{ marginTop:10, paddingTop:10,
+                      borderTop:`1px solid ${C.fog}` }}>
+                      <InlineReactions
+                        table="announcement_reactions"
+                        idField="announcement_id"
+                        rowId={a.id}
+                        user={user}
+                      />
+                    </div>
+                  </Card>
+                );
+              })
             }
           </div>
         </div>
@@ -1807,10 +2464,9 @@ const ScannerPage = ({ role }) => {
     "attendance",
     member.id
   );
-  return { status: "ok", logErr };
   if (logErr) setToast({ msg: "LOG ERR: " + logErr.message, type: "error" });
   else setToast({ msg: "Log OK ✓", type: "success" });
-  return { status: "ok" };
+  return { status: "ok", logErr };
 };
 
   const handleScan = useCallback(async (raw) => {
@@ -2254,7 +2910,6 @@ const UserManagementPage = ({ role }) => {
       if (error || data?.error) {
         setToast({ msg:"Create failed: " + (data?.error || error.message), type:"error" });
       } else {
-        // NEW
         setUsers(prev => [...prev, {
           id: data.userId, name: form.name, email: form.email, role: form.role,
           branch_id: form.branch_id, member_id: form.member_id,
@@ -2381,7 +3036,6 @@ const UserManagementPage = ({ role }) => {
               <Card key={u.id} style={{ opacity: u.role==="deactivated"?.5:1 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12 }}>
                   <Av name={u.name||u.email} size={40}/>
-                  // NEW
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontWeight:700, color:C.ink, fontSize:14 }}>{u.name||"—"}</div>
                     <div style={{ fontSize:11, color:C.mist, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{u.email}</div>
@@ -2434,9 +3088,9 @@ const UserManagementPage = ({ role }) => {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={5} style={{ padding:"28px 16px", textAlign:"center", color:C.mist }}>Loading…</td></tr>
+                  <tr><td colSpan={6} style={{ padding:"28px 16px", textAlign:"center", color:C.mist }}>Loading…</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={5} style={{ padding:"28px 16px", textAlign:"center", color:C.mist }}>No users found.</td></tr>
+                  <tr><td colSpan={6} style={{ padding:"28px 16px", textAlign:"center", color:C.mist }}>No users found.</td></tr>
                 ) : filtered.map(u => {
                   const linkedMember = members.find(m=>m.id===u.member_id);
                   return (
