@@ -1085,12 +1085,21 @@ const loadGreetings = async () => {
   };
 
   const sendGreeting = async () => {
-    if (!newGreeting.trim() || !user?.memberId) return;
+    if (!newGreeting.trim() || !user?.memberId || alreadyGreeted) return;
     setSending(true);
+
     const { error } = await supabase.from("birthday_greetings").insert({
       event_id: item.id, member_id: user.memberId, message: newGreeting.trim(),
     });
-    if (!error) { setNewGreeting(""); await loadGreetings(); }
+
+    if (error) {
+      if (error.code === "23505") {
+        setAlreadyGreeted(true); // unique constraint hit
+      }
+    } else {
+      setNewGreeting("");
+      await loadGreetings();
+    }
     setSending(false);
   };
 
@@ -1534,9 +1543,15 @@ const BirthdayGreetings = ({ eventId, user }) => {
 
   const loadGreetings = async () => {
     const { data } = await supabase.from("birthday_greetings")
-      .select("*, members(name)").eq("event_id", eventId)
-      .order("created_at", { ascending:false });
-    setGreetings(data||[]);
+      .select("*, members(name)").eq("event_id", item.id)
+      .order("created_at", { ascending: false });
+    setGreetings(data || []);
+
+    // Check if current user already greeted
+    if (user?.memberId) {
+      const mine = (data || []).find(g => g.member_id === user.memberId);
+      setAlreadyGreeted(!!mine);
+    }
   };
 
   const sendGreeting = async () => {
