@@ -314,8 +314,6 @@ const loadGreetings = async () => {
     .maybeSingle();
 
   if (existing) {
-    setMsg?.({ text:"You've already sent a greeting for this birthday! 🎂", type:"warn" });
-    // For EventDetailModal in App.jsx, show inline message instead:
     setSending(false);
     return;
   }
@@ -374,27 +372,35 @@ const loadGreetings = async () => {
 
       {/* Birthday greetings wall */}
       {isBirthday && (
-        <div>
-          <div style={{ fontSize:12, fontWeight:600, color:C.mist, marginBottom:12,
+        <div style={{ marginTop:4 }}>
+          {alreadyGreeted ? (
+            <div style={{ background:C.green3, border:`1px solid ${C.green2}`,
+              borderRadius:R.lg, padding:"12px 14px", fontSize:13,
+              color:C.green, fontWeight:600, marginBottom:16, textAlign:"center" }}>
+              🎂 You already sent a birthday greeting!
+            </div>
+          ) : (
+            <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+              <input value={newGreeting} onChange={e=>setNewGreeting(e.target.value)}
+                placeholder="Write a birthday greeting… 🎂"
+                onKeyDown={e=>e.key==="Enter"&&sendGreeting()}
+                style={{ flex:1, padding:"9px 14px", borderRadius:R.full, boxSizing:"border-box",
+                  border:`1.5px solid ${C.cloud}`, fontSize:13, outline:"none", color:C.ink }}/>
+              <button onClick={sendGreeting} disabled={!newGreeting.trim()||sending}
+                style={{ padding:"9px 18px", borderRadius:R.full, background:C.rose2,
+                  color:C.white, border:"none", fontWeight:700, fontSize:13,
+                  cursor:!newGreeting.trim()||sending?"not-allowed":"pointer",
+                  opacity:!newGreeting.trim()||sending?0.6:1, flexShrink:0 }}>
+                {sending ? "…" : "Send 🎉"}
+              </button>
+            </div>
+          )}
+
+          {/* Greetings list — always visible */}
+          <div style={{ fontSize:12, fontWeight:600, color:C.mist, marginBottom:10,
             textTransform:"uppercase", letterSpacing:.4 }}>
             Birthday Greetings ({greetings.length})
           </div>
-
-          <div style={{ display:"flex", gap:8, marginBottom:16 }}>
-            <input value={newGreeting} onChange={e=>setNewGreeting(e.target.value)}
-              placeholder="Write a birthday greeting… 🎂"
-              onKeyDown={e=>e.key==="Enter"&&sendGreeting()}
-              style={{ flex:1, padding:"9px 14px", borderRadius:R.full, boxSizing:"border-box",
-                border:`1.5px solid ${C.cloud}`, fontSize:13, outline:"none", color:C.ink }}/>
-            <button onClick={sendGreeting} disabled={!newGreeting.trim()||sending}
-              style={{ padding:"9px 18px", borderRadius:R.full, background:C.rose2,
-                color:C.white, border:"none", fontWeight:700, fontSize:13,
-                cursor: !newGreeting.trim()||sending ? "not-allowed" : "pointer",
-                opacity: !newGreeting.trim()||sending ? 0.6 : 1, flexShrink:0 }}>
-              {sending ? "…" : "Send 🎉"}
-            </button>
-          </div>
-
           {greetings.length === 0 ? (
             <div style={{ background:C.fog, borderRadius:R.lg, padding:"20px",
               textAlign:"center", color:C.mist, fontSize:13 }}>
@@ -436,6 +442,22 @@ export default function AnnouncementPage({ bg, user, role }) {
   const [selectedEvent, setSelectedEvent] = useState(null);
 
   const isAdmin = role === "admin" || role === "superadmin";
+  const [bdaySuggestions, setBdaySuggestions] = useState([]);
+
+useEffect(() => {
+  const month = new Date().getMonth() + 1; // current month
+  supabase.from("members")
+    .select("id, name, birthdate")
+    .not("birthdate", "is", null)
+    .then(({ data }) => {
+      if (!data) return;
+      const thisMonth = data.filter(m => {
+        const d = new Date(m.birthdate);
+        return d.getMonth() + 1 === month;
+      });
+      setBdaySuggestions(thisMonth);
+    });
+}, []);
 
   useEffect(() => {
     supabase.from("announcements").select("*").order("created_at", { ascending:false })
@@ -592,6 +614,48 @@ export default function AnnouncementPage({ bg, user, role }) {
                 placeholder="e.g. June 2, 2026"/>
               <Btn label={saving?"Saving…":"Post Announcement"} onClick={addAnnouncement} full/>
             </Card>
+
+            {bdaySuggestions.length > 0 && (
+  <Card style={{ marginBottom:16, background:C.rose3, border:`1px solid ${C.rose2}` }}>
+    <h3 style={{ margin:"0 0 12px", fontWeight:700, fontSize:13, color:C.rose }}>
+      🎂 Birthdays this month ({bdaySuggestions.length})
+    </h3>
+    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+      {bdaySuggestions.map(m => {
+        const bday = new Date(m.birthdate);
+        const day = bday.getDate();
+        const monthName = bday.toLocaleString("default", { month:"long" });
+        const alreadyAdded = events.some(e =>
+          e.type === "birthday" && e.name.toLowerCase().includes(m.name.toLowerCase())
+        );
+        return (
+          <div key={m.id} style={{ display:"flex", alignItems:"center",
+            justifyContent:"space-between", gap:10 }}>
+            <div>
+              <div style={{ fontWeight:600, fontSize:13, color:C.ink }}>{m.name}</div>
+              <div style={{ fontSize:11, color:C.rose }}>{monthName} {day}</div>
+            </div>
+            {alreadyAdded ? (
+              <span style={{ fontSize:11, color:C.green, fontWeight:600 }}>✓ Added</span>
+            ) : (
+              <button
+                onClick={() => {
+                  const bday = new Date(m.birthdate);
+                  const label = bday.toLocaleString("default", { month:"long" }) + " " + bday.getDate();
+                  setEForm({ name:m.name, type:"birthday", date:label, branch:"" });
+                }}
+                style={{ border:"none", background:C.rose2, color:C.white,
+                  borderRadius:R.full, padding:"5px 12px", cursor:"pointer",
+                  fontSize:12, fontWeight:600, flexShrink:0 }}>
+                + Add
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  </Card>
+)}
 
             <Card>
               <h3 style={{ margin:"0 0 14px", fontWeight:700, fontSize:14, color:C.ink }}>
