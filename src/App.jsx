@@ -1052,12 +1052,21 @@ const EventDetailModal = ({ open, item, onClose, user }) => {
     setMyReactions(mine);
   };
 
-  const loadGreetings = async () => {
-    const { data } = await supabase.from("birthday_greetings")
-      .select("*, members(name)").eq("event_id", item.id)
-      .order("created_at", { ascending:false });
-    setGreetings(data||[]);
-  };
+  const [alreadyGreeted, setAlreadyGreeted] = useState(false);
+
+// In loadGreetings, check after loading:
+const loadGreetings = async () => {
+  const { data } = await supabase.from("birthday_greetings")
+    .select("*, members(name)").eq("event_id", item.id)
+    .order("created_at", { ascending: false });
+  setGreetings(data || []);
+
+  // Check if current user already greeted
+  if (user?.memberId) {
+    const mine = (data || []).find(g => g.member_id === user.memberId);
+    setAlreadyGreeted(!!mine);
+  }
+};
 
   const handleReact = async (emoji) => {
     if (!user?.memberId || loadingReact) return;
@@ -1128,47 +1137,28 @@ const EventDetailModal = ({ open, item, onClose, user }) => {
         </div>
       </div>
 
-      {isBirthday && (
-        <div>
-          <div style={{ fontSize:12, fontWeight:600, color:C.mist, marginBottom:12,
-            textTransform:"uppercase", letterSpacing:.4 }}>
-            Birthday Greetings ({greetings.length})
-          </div>
-          <div style={{ display:"flex", gap:8, marginBottom:16 }}>
-            <input value={newGreeting} onChange={e=>setNewGreeting(e.target.value)}
-              placeholder="Write a birthday greeting… 🎂"
-              onKeyDown={e=>e.key==="Enter"&&sendGreeting()}
-              style={{ flex:1, padding:"9px 14px", borderRadius:R.full, boxSizing:"border-box",
-                border:`1.5px solid ${C.cloud}`, fontSize:13, outline:"none", color:C.ink }}/>
-            <button onClick={sendGreeting} disabled={!newGreeting.trim()||sending}
-              style={{ padding:"9px 18px", borderRadius:R.full, background:C.rose2,
-                color:C.white, border:"none", fontWeight:700, fontSize:13,
-                cursor:!newGreeting.trim()||sending?"not-allowed":"pointer",
-                opacity:!newGreeting.trim()||sending?0.6:1, flexShrink:0 }}>
-              {sending?"…":"Send 🎉"}
-            </button>
-          </div>
-          {greetings.length === 0 ? (
-            <div style={{ background:C.fog, borderRadius:R.lg, padding:"20px",
-              textAlign:"center", color:C.mist, fontSize:13 }}>
-              No greetings yet — be the first! 🎂
+      {alreadyGreeted ? (
+            <div style={{ background:C.green3, border:`1px solid ${C.green2}`,
+              borderRadius:R.lg, padding:"12px 14px", fontSize:13,
+              color:C.green, fontWeight:600, marginBottom:16, textAlign:"center" }}>
+              🎂 You already sent a birthday greeting!
             </div>
           ) : (
-            <div style={{ display:"flex", flexDirection:"column", gap:10,
-              maxHeight:280, overflowY:"auto" }}>
-              {greetings.map(g => (
-                <div key={g.id} style={{ background:C.fog, borderRadius:R.lg,
-                  padding:"12px 14px", borderLeft:`3px solid ${C.rose2}` }}>
-                  <div style={{ fontWeight:700, fontSize:12, color:C.rose2, marginBottom:4 }}>
-                    {g.members?.name||"Someone"} 🎉
-                  </div>
-                  <div style={{ fontSize:13, color:C.ink, lineHeight:1.5 }}>{g.message}</div>
-                </div>
-              ))}
+            <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+              <input value={newGreeting} onChange={e=>setNewGreeting(e.target.value)}
+                placeholder="Write a birthday greeting… 🎂"
+                onKeyDown={e=>e.key==="Enter"&&sendGreeting()}
+                style={{ flex:1, padding:"9px 14px", borderRadius:R.full, boxSizing:"border-box",
+                  border:`1.5px solid ${C.cloud}`, fontSize:13, outline:"none", color:C.ink }}/>
+              <button onClick={sendGreeting} disabled={!newGreeting.trim()||sending}
+                style={{ padding:"9px 18px", borderRadius:R.full, background:C.rose2,
+                  color:C.white, border:"none", fontWeight:700, fontSize:13,
+                  cursor:!newGreeting.trim()||sending?"not-allowed":"pointer",
+                  opacity:!newGreeting.trim()||sending?0.6:1, flexShrink:0 }}>
+                {sending ? "…" : "Send 🎉"}
+              </button>
             </div>
           )}
-        </div>
-      )}
     </Modal>
   );
 };
@@ -1550,14 +1540,29 @@ const BirthdayGreetings = ({ eventId, user }) => {
   };
 
   const sendGreeting = async () => {
-    if (!newGreeting.trim() || !user?.memberId) return;
-    setSending(true);
-    const { error } = await supabase.from("birthday_greetings").insert({
-      event_id: eventId, member_id: user.memberId, message: newGreeting.trim(),
-    });
-    if (!error) { setNewGreeting(""); await loadGreetings(); }
+  if (!newGreeting.trim() || !user?.memberId) return;
+  setSending(true);
+
+  // Check if already greeted
+  const { data: existing } = await supabase.from("birthday_greetings")
+    .select("id")
+    .eq("event_id", item.id)
+    .eq("member_id", user.memberId)
+    .maybeSingle();
+
+  if (existing) {
+    setMsg?.({ text:"You've already sent a greeting for this birthday! 🎂", type:"warn" });
+    // For EventDetailModal in App.jsx, show inline message instead:
     setSending(false);
-  };
+    return;
+  }
+
+  const { error } = await supabase.from("birthday_greetings").insert({
+    event_id: item.id, member_id: user.memberId, message: newGreeting.trim(),
+  });
+  if (!error) { setNewGreeting(""); await loadGreetings(); }
+  setSending(false);
+};
 
   return (
     <div>

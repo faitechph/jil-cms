@@ -270,12 +270,21 @@ const EventDetailModal = ({ open, item, onClose, user }) => {
     setMyReactions(mine);
   };
 
-  const loadGreetings = async () => {
-    const { data } = await supabase.from("birthday_greetings")
-      .select("*, members(name)").eq("event_id", item.id)
-      .order("created_at", { ascending:false });
-    setGreetings(data||[]);
-  };
+  const [alreadyGreeted, setAlreadyGreeted] = useState(false);
+
+// In loadGreetings, check after loading:
+const loadGreetings = async () => {
+  const { data } = await supabase.from("birthday_greetings")
+    .select("*, members(name)").eq("event_id", item.id)
+    .order("created_at", { ascending: false });
+  setGreetings(data || []);
+
+  // Check if current user already greeted
+  if (user?.memberId) {
+    const mine = (data || []).find(g => g.member_id === user.memberId);
+    setAlreadyGreeted(!!mine);
+  }
+};
 
   const handleReact = async (emoji) => {
     if (!user?.memberId || loadingReact) return;
@@ -294,14 +303,29 @@ const EventDetailModal = ({ open, item, onClose, user }) => {
   };
 
   const sendGreeting = async () => {
-    if (!newGreeting.trim() || !user?.memberId) return;
-    setSending(true);
-    const { error } = await supabase.from("birthday_greetings").insert({
-      event_id: item.id, member_id: user.memberId, message: newGreeting.trim(),
-    });
-    if (!error) { setNewGreeting(""); await loadGreetings(); }
+  if (!newGreeting.trim() || !user?.memberId) return;
+  setSending(true);
+
+  // Check if already greeted
+  const { data: existing } = await supabase.from("birthday_greetings")
+    .select("id")
+    .eq("event_id", item.id)
+    .eq("member_id", user.memberId)
+    .maybeSingle();
+
+  if (existing) {
+    setMsg?.({ text:"You've already sent a greeting for this birthday! 🎂", type:"warn" });
+    // For EventDetailModal in App.jsx, show inline message instead:
     setSending(false);
-  };
+    return;
+  }
+
+  const { error } = await supabase.from("birthday_greetings").insert({
+    event_id: item.id, member_id: user.memberId, message: newGreeting.trim(),
+  });
+  if (!error) { setNewGreeting(""); await loadGreetings(); }
+  setSending(false);
+};
 
   if (!open || !item) return null;
 
