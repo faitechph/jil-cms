@@ -1056,7 +1056,7 @@ const EventDetailModal = ({ open, item, onClose, user }) => {
 // In loadGreetings, check after loading:
 const loadGreetings = async () => {
   const { data } = await supabase.from("birthday_greetings")
-    .select("*, members(name)").eq("event_id", eventId)
+    .select("*, members(name)").eq("event_id", item.id)
     .order("created_at", { ascending: false });
   setGreetings(data || []);
 
@@ -1087,10 +1087,10 @@ const loadGreetings = async () => {
   if (!newGreeting.trim() || !user?.memberId) return;
   setSending(true);
   const { data: existing } = await supabase.from("birthday_greetings")
-    .select("id").eq("event_id", eventId).eq("member_id", user.memberId).maybeSingle();
+    .select("id").eq("event_id", item.id).eq("member_id", user.memberId).maybeSingle();
   if (existing) { setSending(false); return; } // ← just return, no setMsg
   const { error } = await supabase.from("birthday_greetings").insert({
-    event_id: eventId, member_id: user.memberId, message: newGreeting.trim(),
+    event_id: item.id, member_id: user.memberId, message: newGreeting.trim(),
   });
   if (!error) { setNewGreeting(""); await loadGreetings(); }
   setSending(false);
@@ -1595,7 +1595,7 @@ const BirthdayGreetings = ({ eventId, user }) => {
   }
 
   const { error } = await supabase.from("birthday_greetings").insert({
-    event_id: item.id, member_id: user.memberId, message: newGreeting.trim(),
+    event_id: eventId, member_id: user.memberId, message: newGreeting.trim(),
   });
   if (!error) { setNewGreeting(""); await loadGreetings(); }
   setSending(false);
